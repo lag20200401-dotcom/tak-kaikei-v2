@@ -432,8 +432,9 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
   import {
-    getFirestore, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot,
-    query, orderBy, serverTimestamp, enableIndexedDbPersistence
+    initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+    collection, doc, addDoc, setDoc, deleteDoc, onSnapshot,
+    query, orderBy, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
   // ★ Firebase設定 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -448,13 +449,16 @@
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   const fbApp = initializeApp(firebaseConfig);
-  const db = getFirestore(fbApp);
 
-  // オフライン対応(端末側にキャッシュ)
+  // v11新API: オフラインキャッシュ + 複数タブ対応で初期化
+  let db;
   try {
-    await enableIndexedDbPersistence(db);
+    db = initializeFirestore(fbApp, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    });
   } catch (e) {
-    console.warn('Persistence not enabled:', e.code);
+    console.warn('Persistence init failed, falling back:', e);
+    db = initializeFirestore(fbApp, {});
   }
 
   // グローバル公開(Alpineから利用)
@@ -501,7 +505,14 @@ function appData() {
       editing: null,
       saving: false,
       error: '',
-      data: this.emptyProduct()
+      data: {
+        name: '',
+        dealerPrice: null,
+        sellingPrice: null,
+        taxCategory: '8%',
+        initialStock: 0,
+        active: true
+      }
     },
 
     emptyProduct() {
