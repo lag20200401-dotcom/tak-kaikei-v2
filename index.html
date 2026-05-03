@@ -2318,6 +2318,7 @@ function app() {
     },
 
     // 月初繰越の読み込み(自動コピー対応)
+    // ★案A: 手動入力(isManual:true)のみ保護、それ以外は毎回前月末から再計算
     async loadCashbookCarry(month) {
       if (!month) return;
       const { db, doc, getDoc, setDoc, serverTimestamp } = window._fb;
@@ -2325,33 +2326,39 @@ function app() {
         const ref = doc(db, 'cashbook_carry', month);
         const snap = await getDoc(ref);
 
-        if (snap.exists()) {
-          const data = snap.data();
-          this.cashbookCarry = Number(data.carryAmount) || 0;
-          this.cashbookCarryIsManual = !!data.isManual;
-        } else {
-          // 前月から自動コピー試行
-          const prev = this.prevMonth(month);
-          const prevSnap = await getDoc(doc(db, 'cashbook_carry', prev));
-          if (prevSnap.exists()) {
-            // 前月の月末残高を計算
-            const prevSummary = this.calcMonthCashSummary(prev);
-            const carry = (Number(prevSnap.data().carryAmount) || 0)
-                        + prevSummary.income - prevSummary.expense;
+        // 1. 手動入力のレコードがあれば、それを尊重して終了
+        if (snap.exists() && snap.data().isManual === true) {
+          this.cashbookCarry = Number(snap.data().carryAmount) || 0;
+          this.cashbookCarryIsManual = true;
+          return;
+        }
+
+        // 2. 自動コピー or 未作成 → 前月から最新の値で再計算
+        const prev = this.prevMonth(month);
+        const prevSnap = await getDoc(doc(db, 'cashbook_carry', prev));
+        if (prevSnap.exists()) {
+          // 前月の月末残高 = 前月繰越 + 前月の現金収入 - 前月の現金支出
+          const prevSummary = this.calcMonthCashSummary(prev);
+          const carry = (Number(prevSnap.data().carryAmount) || 0)
+                      + prevSummary.income - prevSummary.expense;
+
+          // 既存値と異なる時だけ書き込み(無駄な書き込み回避)
+          const oldCarry = snap.exists() ? (Number(snap.data().carryAmount) || 0) : null;
+          if (oldCarry !== carry) {
             await setDoc(ref, {
               yearMonth: month,
               carryAmount: carry,
               isManual: false,
               updatedAt: serverTimestamp(),
-              createdAt: serverTimestamp()
-            });
-            this.cashbookCarry = carry;
-            this.cashbookCarryIsManual = false;
-          } else {
-            // 前月もなし → 初月扱い、繰越0
-            this.cashbookCarry = 0;
-            this.cashbookCarryIsManual = false;
+              ...(snap.exists() ? {} : { createdAt: serverTimestamp() })
+            }, { merge: true });
           }
+          this.cashbookCarry = carry;
+          this.cashbookCarryIsManual = false;
+        } else {
+          // 前月もなし → 初月扱い、繰越0
+          this.cashbookCarry = 0;
+          this.cashbookCarryIsManual = false;
         }
       } catch (err) {
         console.error(err);
