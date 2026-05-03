@@ -891,7 +891,232 @@
 
   </section>
 
-  <!-- ====== その他タブ(準備中) ====== -->
+  <!-- ====== 現金出納帳(v0.4 第3弾) ====== -->
+  <section x-show="currentTab==='cashbook'" class="space-y-4">
+
+    <!-- ヘッダー: 月選択・月初繰越 -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 class="text-lg font-bold text-slate-800">現金出納帳</h2>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-600">表示月:</label>
+          <input type="month" x-model="cashbookMonth"
+                 @change="onCashbookMonthChange()"
+                 class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+          <button @click="cashbookMonth = currentMonthStr(); onCashbookMonthChange()"
+                  class="text-xs text-teal-700 hover:underline">今月</button>
+        </div>
+      </div>
+
+      <!-- 月初繰越 -->
+      <div class="bg-slate-50 rounded-lg p-4 flex items-center justify-between flex-wrap gap-2">
+        <div class="text-sm text-slate-600">
+          月初繰越残高
+          <span x-show="!cashbookCarryIsManual" class="ml-2 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">前月から自動</span>
+          <span x-show="cashbookCarryIsManual" class="ml-2 text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">手動入力</span>
+        </div>
+
+        <!-- 表示モード -->
+        <div x-show="!cashbookCarryEditing" class="flex items-center gap-3">
+          <span class="text-xl font-bold text-slate-800" x-text="'¥' + cashbookCarry.toLocaleString()"></span>
+          <button @click="startEditCarry()" class="text-xs text-teal-700 hover:underline">編集</button>
+        </div>
+
+        <!-- 編集モード -->
+        <div x-show="cashbookCarryEditing" class="flex items-center gap-2">
+          <input type="number" x-model.number="cashbookCarryEditValue"
+                 class="px-3 py-1 border border-slate-300 rounded-lg text-sm w-32 text-right">
+          <button @click="saveCashbookCarryManual()"
+                  class="px-3 py-1 bg-teal-700 hover:bg-teal-800 text-white text-xs rounded">保存</button>
+          <button @click="cancelEditCarry()"
+                  class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded">キャンセル</button>
+        </div>
+      </div>
+
+      <div x-show="cashbookMessage" class="mt-3 text-sm"
+           :class="cashbookMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+           x-text="cashbookMessage"></div>
+    </div>
+
+    <!-- サマリカード -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">現金収入</div>
+        <div class="text-xl font-bold text-emerald-600" x-text="'+¥' + cashbookSummary.income.toLocaleString()"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">現金支出</div>
+        <div class="text-xl font-bold text-red-500" x-text="'-¥' + cashbookSummary.expense.toLocaleString()"></div>
+      </div>
+      <div class="bg-teal-50 rounded-xl shadow p-4 border border-teal-200">
+        <div class="text-xs text-teal-700">月末残高</div>
+        <div class="text-xl font-bold text-teal-700" x-text="'¥' + cashbookSummary.endBalance.toLocaleString()"></div>
+      </div>
+    </div>
+
+    <!-- サブタブ切替 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div class="flex border-b border-slate-200">
+        <button @click="cashbookSubTab='detail'"
+          :class="cashbookSubTab==='detail' ? 'bg-teal-700 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'"
+          class="flex-1 px-4 py-3 text-sm font-medium">
+          📋 明細
+        </button>
+        <button @click="cashbookSubTab='category'"
+          :class="cashbookSubTab==='category' ? 'bg-teal-700 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'"
+          class="flex-1 px-4 py-3 text-sm font-medium">
+          📊 カテゴリ別
+        </button>
+      </div>
+
+      <!-- 明細タブ -->
+      <div x-show="cashbookSubTab==='detail'">
+        <div x-show="cashbookEntries.length === 0" class="p-8 text-center text-slate-400 text-sm">
+          この月の現金入出金はまだありません
+        </div>
+        <div x-show="cashbookEntries.length > 0" class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 text-slate-600">
+              <tr>
+                <th class="px-3 py-2 text-left">日付</th>
+                <th class="px-3 py-2 text-left">種別</th>
+                <th class="px-3 py-2 text-left">摘要</th>
+                <th class="px-3 py-2 text-right">入金</th>
+                <th class="px-3 py-2 text-right">出金</th>
+                <th class="px-3 py-2 text-right">残高</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- 月初繰越行 -->
+              <tr class="border-t border-slate-100 bg-slate-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="cashbookMonth + '-01'"></td>
+                <td class="px-3 py-2"><span class="text-xs px-2 py-0.5 bg-slate-200 text-slate-700 rounded">繰越</span></td>
+                <td class="px-3 py-2 text-slate-500">月初繰越残高</td>
+                <td class="px-3 py-2 text-right text-slate-400">-</td>
+                <td class="px-3 py-2 text-right text-slate-400">-</td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + cashbookCarry.toLocaleString()"></td>
+              </tr>
+              <!-- 取引行 -->
+              <template x-for="(e, idx) in cashbookEntries" :key="idx">
+                <tr class="border-t border-slate-100 hover:bg-slate-50">
+                  <td class="px-3 py-2 whitespace-nowrap" x-text="e.date"></td>
+                  <td class="px-3 py-2">
+                    <span class="text-xs px-2 py-0.5 rounded"
+                          :class="{
+                            '来院': 'bg-emerald-100 text-emerald-700',
+                            '物販': 'bg-purple-100 text-purple-700',
+                            '経費': 'bg-amber-100 text-amber-700',
+                            '広告費': 'bg-pink-100 text-pink-700'
+                          }[e.type] || 'bg-slate-100 text-slate-600'"
+                          x-text="e.type"></span>
+                  </td>
+                  <td class="px-3 py-2" x-text="e.desc"></td>
+                  <td class="px-3 py-2 text-right text-emerald-600 font-medium"
+                      x-text="e.income > 0 ? '+¥' + e.income.toLocaleString() : '-'"></td>
+                  <td class="px-3 py-2 text-right text-red-500 font-medium"
+                      x-text="e.expense > 0 ? '-¥' + e.expense.toLocaleString() : '-'"></td>
+                  <td class="px-3 py-2 text-right font-bold" x-text="'¥' + e.balance.toLocaleString()"></td>
+                </tr>
+              </template>
+              <!-- 月末残高行 -->
+              <tr class="border-t-2 border-slate-300 bg-teal-50">
+                <td class="px-3 py-2 whitespace-nowrap font-bold" x-text="cashbookMonth + '-末'"></td>
+                <td class="px-3 py-2"><span class="text-xs px-2 py-0.5 bg-teal-200 text-teal-800 rounded">月末残高</span></td>
+                <td class="px-3 py-2 font-bold text-slate-700">月末残高</td>
+                <td class="px-3 py-2 text-right text-slate-400">-</td>
+                <td class="px-3 py-2 text-right text-slate-400">-</td>
+                <td class="px-3 py-2 text-right text-lg font-bold text-teal-700"
+                    x-text="'¥' + cashbookSummary.endBalance.toLocaleString()"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- カテゴリ別タブ -->
+      <div x-show="cashbookSubTab==='category'" class="p-5">
+
+        <!-- 現金収入 -->
+        <div class="mb-6">
+          <h3 class="text-sm font-bold text-emerald-700 mb-2 flex items-center gap-2">
+            <span>💰 現金収入</span>
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <tbody>
+                <template x-for="row in cashbookByCategory.incomeRows" :key="row.name">
+                  <tr class="border-t border-slate-100">
+                    <td class="px-3 py-2" x-text="row.name"></td>
+                    <td class="px-3 py-2 text-right font-medium text-emerald-600"
+                        x-text="'¥' + row.amount.toLocaleString()"></td>
+                  </tr>
+                </template>
+                <tr class="border-t-2 border-slate-300 bg-emerald-50">
+                  <td class="px-3 py-2 font-bold">小計</td>
+                  <td class="px-3 py-2 text-right font-bold text-emerald-700"
+                      x-text="'¥' + cashbookSummary.income.toLocaleString()"></td>
+                </tr>
+                <tr x-show="cashbookByCategory.incomeRows.length === 0">
+                  <td colspan="2" class="p-3 text-center text-slate-400 text-xs">現金収入なし</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 現金支出 -->
+        <div class="mb-6">
+          <h3 class="text-sm font-bold text-red-700 mb-2 flex items-center gap-2">
+            <span>💸 現金支出</span>
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <tbody>
+                <template x-for="row in cashbookByCategory.expenseRows" :key="row.name">
+                  <tr class="border-t border-slate-100">
+                    <td class="px-3 py-2" x-text="row.name"></td>
+                    <td class="px-3 py-2 text-right font-medium text-red-500"
+                        x-text="'¥' + row.amount.toLocaleString()"></td>
+                  </tr>
+                </template>
+                <tr class="border-t-2 border-slate-300 bg-red-50">
+                  <td class="px-3 py-2 font-bold">小計</td>
+                  <td class="px-3 py-2 text-right font-bold text-red-700"
+                      x-text="'¥' + cashbookSummary.expense.toLocaleString()"></td>
+                </tr>
+                <tr x-show="cashbookByCategory.expenseRows.length === 0">
+                  <td colspan="2" class="p-3 text-center text-slate-400 text-xs">現金支出なし</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 計算式 -->
+        <div class="bg-slate-50 rounded-lg p-4 text-sm">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <span class="text-slate-600">月初繰越</span>
+            <span class="font-bold" x-text="'¥' + cashbookCarry.toLocaleString()"></span>
+          </div>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <span class="text-emerald-600">+ 現金収入</span>
+            <span class="font-bold text-emerald-600" x-text="'¥' + cashbookSummary.income.toLocaleString()"></span>
+          </div>
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <span class="text-red-500">− 現金支出</span>
+            <span class="font-bold text-red-500" x-text="'¥' + cashbookSummary.expense.toLocaleString()"></span>
+          </div>
+          <hr class="my-2 border-slate-300">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <span class="text-teal-700 font-bold">= 月末残高</span>
+            <span class="text-lg font-bold text-teal-700" x-text="'¥' + cashbookSummary.endBalance.toLocaleString()"></span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
   <template x-for="t in tabs.filter(x => x.placeholder)" :key="t.id">
     <section x-show="currentTab===t.id">
       <div class="bg-white rounded-xl shadow p-6">
@@ -1046,7 +1271,7 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
-  collection, doc, getDocs, setDoc, deleteDoc,
+  collection, doc, getDoc, getDocs, setDoc, deleteDoc,
   onSnapshot, query, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
@@ -1067,7 +1292,7 @@ const db = initializeFirestore(fbApp, {
 
 // グローバルに公開(Alpine から使うため)
 window._fb = {
-  db, collection, doc, getDocs, setDoc, deleteDoc,
+  db, collection, doc, getDoc, getDocs, setDoc, deleteDoc,
   onSnapshot, query, orderBy, serverTimestamp
 };
 
@@ -1095,7 +1320,7 @@ function app() {
       { id: 'sales',     label: '物販',           placeholder: false },
       { id: 'expenses',  label: '経費',           placeholder: false },
       { id: 'ads',       label: '広告費',         placeholder: false },
-      { id: 'cashbook',  label: '現金出納帳',     placeholder: true,  note: 'v0.4 で実装予定' },
+      { id: 'cashbook',  label: '現金出納帳',     placeholder: false },
       { id: 'export',    label: '月末出力',       placeholder: true,  note: 'v0.5 で実装予定' },
     ],
 
@@ -1165,6 +1390,16 @@ function app() {
     adFilterMonth: '',
     adFilterCategory: '',
 
+    // ===== 現金出納帳(v0.4 第3弾) =====
+    cashbookMonth: '',
+    cashbookSubTab: 'detail',  // 'detail' | 'category'
+    cashbookCarry: 0,           // 月初繰越残高
+    cashbookCarryIsManual: false,
+    cashbookCarryEditing: false,
+    cashbookCarryEditValue: 0,
+    cashbookMessage: '',
+    cashbookMessageType: 'ok',
+
     // ===== 初期化 =====
     init() {
       this.visitForm = this.emptyVisit();
@@ -1176,6 +1411,7 @@ function app() {
       this.salesFilterMonth = this.currentMonthStr();
       this.expenseFilterMonth = this.currentMonthStr();
       this.adFilterMonth = this.currentMonthStr();
+      this.cashbookMonth = this.currentMonthStr();
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -2068,9 +2304,246 @@ function app() {
       } catch (err) {
         alert('削除エラー: ' + err.message);
       }
-    }
+    },
 
     // ===== /v0.4 第2弾 広告費機能 =====
+
+    // ============================================
+    // ===== v0.4 第3弾 現金出納帳機能 =====
+    // ============================================
+
+    // 月選択が変わったら繰越を読み込み
+    async onCashbookMonthChange() {
+      await this.loadCashbookCarry(this.cashbookMonth);
+    },
+
+    // 月初繰越の読み込み(自動コピー対応)
+    async loadCashbookCarry(month) {
+      if (!month) return;
+      const { db, doc, getDoc, setDoc, serverTimestamp } = window._fb;
+      try {
+        const ref = doc(db, 'cashbook_carry', month);
+        const snap = await getDoc(ref);
+
+        if (snap.exists()) {
+          const data = snap.data();
+          this.cashbookCarry = Number(data.carryAmount) || 0;
+          this.cashbookCarryIsManual = !!data.isManual;
+        } else {
+          // 前月から自動コピー試行
+          const prev = this.prevMonth(month);
+          const prevSnap = await getDoc(doc(db, 'cashbook_carry', prev));
+          if (prevSnap.exists()) {
+            // 前月の月末残高を計算
+            const prevSummary = this.calcMonthCashSummary(prev);
+            const carry = (Number(prevSnap.data().carryAmount) || 0)
+                        + prevSummary.income - prevSummary.expense;
+            await setDoc(ref, {
+              yearMonth: month,
+              carryAmount: carry,
+              isManual: false,
+              updatedAt: serverTimestamp(),
+              createdAt: serverTimestamp()
+            });
+            this.cashbookCarry = carry;
+            this.cashbookCarryIsManual = false;
+          } else {
+            // 前月もなし → 初月扱い、繰越0
+            this.cashbookCarry = 0;
+            this.cashbookCarryIsManual = false;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        this.cashbookMessage = '繰越読込エラー: ' + err.message;
+        this.cashbookMessageType = 'err';
+      }
+    },
+
+    // 月初繰越の手動編集を保存
+    async saveCashbookCarryManual() {
+      if (!this.cashbookMonth) return;
+      const { db, doc, setDoc, serverTimestamp } = window._fb;
+      try {
+        const value = Number(this.cashbookCarryEditValue) || 0;
+        await setDoc(doc(db, 'cashbook_carry', this.cashbookMonth), {
+          yearMonth: this.cashbookMonth,
+          carryAmount: value,
+          isManual: true,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        this.cashbookCarry = value;
+        this.cashbookCarryIsManual = true;
+        this.cashbookCarryEditing = false;
+        this.cashbookMessage = '繰越を更新しました';
+        this.cashbookMessageType = 'ok';
+        setTimeout(() => this.cashbookMessage = '', 2500);
+      } catch (err) {
+        console.error(err);
+        alert('繰越保存エラー: ' + err.message);
+      }
+    },
+
+    startEditCarry() {
+      this.cashbookCarryEditValue = this.cashbookCarry;
+      this.cashbookCarryEditing = true;
+    },
+    cancelEditCarry() {
+      this.cashbookCarryEditing = false;
+    },
+
+    prevMonth(yyyymm) {
+      const [y, m] = yyyymm.split('-').map(Number);
+      const d = new Date(y, m - 2, 1);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    },
+
+    // 現金収入・支出のサマリ計算(任意月用)
+    calcMonthCashSummary(month) {
+      let income = 0, expense = 0;
+      // 来院(現金)
+      for (const v of this.visits) {
+        if ((v.date || '').startsWith(month) && v.paymentMethod === '現金') {
+          income += Number(v.amount) || 0;
+        }
+      }
+      // 物販(現金)
+      for (const s of this.sales) {
+        if ((s.date || '').startsWith(month) && s.paymentMethod === '現金' && !s.isSample) {
+          income += Number(s.amount) || 0;
+        }
+      }
+      // 経費(現金) ※その他は除外
+      for (const e of this.expenses) {
+        if ((e.date || '').startsWith(month) && e.paymentMethod === '現金') {
+          expense += Number(e.amount) || 0;
+        }
+      }
+      // 広告費(現金)
+      for (const a of this.ads) {
+        if ((a.date || '').startsWith(month) && a.paymentMethod === '現金') {
+          expense += Number(a.amount) || 0;
+        }
+      }
+      return { income, expense };
+    },
+
+    // 明細用エントリ生成
+    get cashbookEntries() {
+      const m = this.cashbookMonth;
+      if (!m) return [];
+      const list = [];
+
+      // 来院(現金)
+      for (const v of this.visits) {
+        if ((v.date || '').startsWith(m) && v.paymentMethod === '現金') {
+          list.push({
+            date: v.date,
+            type: '来院',
+            desc: `${v.customerName}(${v.menu || '-'})`,
+            income: Number(v.amount) || 0,
+            expense: 0
+          });
+        }
+      }
+      // 物販(現金・サンプル除く)
+      for (const s of this.sales) {
+        if ((s.date || '').startsWith(m) && s.paymentMethod === '現金' && !s.isSample) {
+          list.push({
+            date: s.date,
+            type: '物販',
+            desc: `${s.productName} × ${s.quantity}`,
+            income: Number(s.amount) || 0,
+            expense: 0
+          });
+        }
+      }
+      // 経費(現金)
+      for (const e of this.expenses) {
+        if ((e.date || '').startsWith(m) && e.paymentMethod === '現金') {
+          list.push({
+            date: e.date,
+            type: '経費',
+            desc: `${e.category}${e.note ? ' / ' + e.note : ''}`,
+            income: 0,
+            expense: Number(e.amount) || 0
+          });
+        }
+      }
+      // 広告費(現金)
+      for (const a of this.ads) {
+        if ((a.date || '').startsWith(m) && a.paymentMethod === '現金') {
+          list.push({
+            date: a.date,
+            type: '広告費',
+            desc: `${a.category}${a.note ? ' / ' + a.note : ''}`,
+            income: 0,
+            expense: Number(a.amount) || 0
+          });
+        }
+      }
+
+      // 日付昇順 → 残高累計
+      list.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+      let bal = Number(this.cashbookCarry) || 0;
+      for (const item of list) {
+        bal = bal + item.income - item.expense;
+        item.balance = bal;
+      }
+      return list;
+    },
+
+    // 現金収入のサマリ(現在月)
+    get cashbookSummary() {
+      const m = this.cashbookMonth;
+      const sum = this.calcMonthCashSummary(m);
+      return {
+        income: sum.income,
+        expense: sum.expense,
+        endBalance: (Number(this.cashbookCarry) || 0) + sum.income - sum.expense
+      };
+    },
+
+    // カテゴリ別集計
+    get cashbookByCategory() {
+      const m = this.cashbookMonth;
+      const incomeMap = { '来院売上(現金)': 0, '物販売上(現金)': 0 };
+      const expenseMap = {};
+
+      for (const v of this.visits) {
+        if ((v.date || '').startsWith(m) && v.paymentMethod === '現金') {
+          incomeMap['来院売上(現金)'] += Number(v.amount) || 0;
+        }
+      }
+      for (const s of this.sales) {
+        if ((s.date || '').startsWith(m) && s.paymentMethod === '現金' && !s.isSample) {
+          incomeMap['物販売上(現金)'] += Number(s.amount) || 0;
+        }
+      }
+      for (const e of this.expenses) {
+        if ((e.date || '').startsWith(m) && e.paymentMethod === '現金') {
+          const k = e.category || '(未分類)';
+          expenseMap[k] = (expenseMap[k] || 0) + (Number(e.amount) || 0);
+        }
+      }
+      for (const a of this.ads) {
+        if ((a.date || '').startsWith(m) && a.paymentMethod === '現金') {
+          const k = `広告費 / ${a.category}`;
+          expenseMap[k] = (expenseMap[k] || 0) + (Number(a.amount) || 0);
+        }
+      }
+
+      const incomeRows = Object.entries(incomeMap)
+        .filter(([_, v]) => v > 0)
+        .map(([name, amount]) => ({ name, amount }));
+      const expenseRows = Object.entries(expenseMap)
+        .map(([name, amount]) => ({ name, amount }))
+        .sort((a, b) => b.amount - a.amount);
+
+      return { incomeRows, expenseRows };
+    }
+
+    // ===== /v0.4 第3弾 現金出納帳機能 =====
   };
 }
 </script>
