@@ -290,10 +290,10 @@
             <template x-for="p in products" :key="p.id">
               <tr class="border-t border-slate-100 hover:bg-slate-50">
                 <td class="px-3 py-2" x-text="p.name"></td>
-                <td class="px-3 py-2 text-right" x-text="p.agencyPrice ? '¥' + p.agencyPrice.toLocaleString() : '-'"></td>
-                <td class="px-3 py-2 text-right" x-text="'¥' + (p.salesPrice||0).toLocaleString()"></td>
-                <td class="px-3 py-2 text-center" x-text="(p.taxRate*100) + '%'"></td>
-                <td class="px-3 py-2 text-right" x-text="p.openingStock||0"></td>
+                <td class="px-3 py-2 text-right" x-text="p.dealerPrice ? '¥' + p.dealerPrice.toLocaleString() : '-'"></td>
+                <td class="px-3 py-2 text-right" x-text="'¥' + (p.sellingPrice||0).toLocaleString()"></td>
+                <td class="px-3 py-2 text-center" x-text="p.taxCategory || '-'"></td>
+                <td class="px-3 py-2 text-right" x-text="p.initialStock||0"></td>
                 <td class="px-3 py-2 text-center">
                   <span class="text-xs px-2 py-0.5 rounded"
                         :class="p.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'"
@@ -347,27 +347,27 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-slate-600 mb-1">代理店価格(原価)</label>
-          <input type="number" x-model.number="productForm.agencyPrice"
+          <input type="number" x-model.number="productForm.dealerPrice"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
         <div>
           <label class="block text-xs text-slate-600 mb-1">販売価格 *</label>
-          <input type="number" x-model.number="productForm.salesPrice"
+          <input type="number" x-model.number="productForm.sellingPrice"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs text-slate-600 mb-1">消費税区分</label>
-          <select x-model.number="productForm.taxRate"
+          <select x-model="productForm.taxCategory"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-            <option :value="0.08">8%(食品系)</option>
-            <option :value="0.10">10%</option>
+            <option value="8%">8%(食品系)</option>
+            <option value="10%">10%</option>
           </select>
         </div>
         <div>
           <label class="block text-xs text-slate-600 mb-1">月初在庫数</label>
-          <input type="number" x-model.number="productForm.openingStock"
+          <input type="number" x-model.number="productForm.initialStock"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
       </div>
@@ -379,7 +379,7 @@
     <div class="flex justify-end gap-2 mt-5">
       <button @click="productModalOpen = false"
         class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">キャンセル</button>
-      <button @click="saveProduct()" :disabled="!productForm.name || !productForm.salesPrice || saving"
+      <button @click="saveProduct()" :disabled="!productForm.name || !productForm.sellingPrice || saving"
         class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded-lg">
         <span x-show="!saving">保存</span>
         <span x-show="saving">保存中...</span>
@@ -469,7 +469,7 @@ function app() {
 
     // ===== 商品フォーム =====
     productModalOpen: false,
-    productForm: { id: null, name: '', agencyPrice: 0, salesPrice: 0, taxRate: 0.10, openingStock: 0, active: true },
+    productForm: { id: null, name: '', dealerPrice: 0, sellingPrice: 0, taxCategory: '10%', initialStock: 0, active: true },
 
     // ===== 初期化 =====
     init() {
@@ -679,7 +679,7 @@ function app() {
 
     // ===== 商品マスター =====
     emptyProduct() {
-      return { id: null, name: '', agencyPrice: 0, salesPrice: 0, taxRate: 0.10, openingStock: 0, active: true };
+      return { id: null, name: '', dealerPrice: 0, sellingPrice: 0, taxCategory: '10%', initialStock: 0, active: true };
     },
     openProductModal() {
       this.productForm = this.emptyProduct();
@@ -697,10 +697,10 @@ function app() {
         const ref = p.id ? doc(db, 'products', p.id) : doc(collection(db, 'products'));
         const data = {
           name: p.name.trim(),
-          agencyPrice: p.agencyPrice || 0,
-          salesPrice: p.salesPrice || 0,
-          taxRate: p.taxRate || 0.10,
-          openingStock: p.openingStock || 0,
+          dealerPrice: p.dealerPrice || 0,
+          sellingPrice: p.sellingPrice || 0,
+          taxCategory: p.taxCategory || '10%',
+          initialStock: p.initialStock || 0,
           active: p.active !== false,
           updatedAt: serverTimestamp()
         };
@@ -727,9 +727,9 @@ function app() {
       if (!confirm('テスト用商品を一括登録します。よろしいですか?')) return;
       const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
       const seeds = [
-        { name: 'NMN サプリ', agencyPrice: 8000, salesPrice: 12000, taxRate: 0.08, openingStock: 0, active: true },
-        { name: 'TeraVita', agencyPrice: 15000, salesPrice: 25000, taxRate: 0.08, openingStock: 0, active: true },
-        { name: 'プロテイン', agencyPrice: 3000, salesPrice: 5500, taxRate: 0.08, openingStock: 0, active: true },
+        { name: 'NMN サプリ', dealerPrice: 8000, sellingPrice: 12000, taxCategory: '8%', initialStock: 0, active: true },
+        { name: 'TeraVita', dealerPrice: 15000, sellingPrice: 25000, taxCategory: '8%', initialStock: 0, active: true },
+        { name: 'プロテイン', dealerPrice: 3000, sellingPrice: 5500, taxCategory: '8%', initialStock: 0, active: true },
       ];
       for (const s of seeds) {
         const ref = doc(collection(db, 'products'));
