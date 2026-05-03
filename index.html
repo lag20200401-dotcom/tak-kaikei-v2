@@ -1,690 +1,739 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-  <meta name="theme-color" content="#F7F4EE" />
-  <title>整体院TAK 会計 v2</title>
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@500;700&display=swap" rel="stylesheet">
-
-  <!-- Tailwind (CDN) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-<!-- Alpine.js -->
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js"></script>
-
-  <style>
-    :root {
-      --bg-canvas:    #F7F4EE;
-      --bg-card:      #FFFFFF;
-      --bg-soft:      #FBF9F4;
-      --ink-primary:  #1A1A1A;
-      --ink-secondary:#5C5C5C;
-      --ink-muted:    #999999;
-      --line:         #E0DAD0;
-      --line-soft:    #EFEAE0;
-      --accent:       #B8732F;
-      --accent-hover: #9C5F23;
-      --accent-soft:  #F4E8D8;
-      --success:      #4A7C59;
-      --error:        #B33A3A;
-      --warning:      #C9A227;
-    }
-
-    * { -webkit-tap-highlight-color: transparent; }
-
-    body {
-      font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-canvas);
-      color: var(--ink-primary);
-      font-feature-settings: "palt" 1;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    .font-serif { font-family: 'Noto Serif JP', serif; }
-    .tabular { font-variant-numeric: tabular-nums; }
-
-    /* Card */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-    }
-
-    /* Buttons */
-    .btn-primary {
-      background: var(--accent);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 4px;
-      font-weight: 500;
-      transition: background 0.15s ease;
-      letter-spacing: 0.02em;
-    }
-    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .btn-ghost {
-      color: var(--ink-secondary);
-      padding: 8px 16px;
-      border-radius: 4px;
-      transition: background 0.15s ease;
-    }
-    .btn-ghost:hover { background: var(--accent-soft); color: var(--accent); }
-
-    .btn-danger {
-      color: var(--error);
-      padding: 6px 12px;
-      border-radius: 4px;
-      transition: background 0.15s ease;
-    }
-    .btn-danger:hover { background: rgba(179, 58, 58, 0.08); }
-
-    /* Inputs */
-    .input {
-      background: white;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 10px 14px;
-      font-size: 15px;
-      width: 100%;
-      transition: border-color 0.15s ease;
-    }
-    .input:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-    }
-    .label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ink-secondary);
-      margin-bottom: 6px;
-      letter-spacing: 0.02em;
-    }
-
-    /* Tab nav */
-    .tab-link {
-      padding: 14px 20px;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--ink-secondary);
-      border-bottom: 2px solid transparent;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-      letter-spacing: 0.02em;
-    }
-    .tab-link:hover { color: var(--ink-primary); }
-    .tab-link.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-
-    /* Table */
-    .data-table { width: 100%; border-collapse: collapse; }
-    .data-table th {
-      text-align: left;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-      color: var(--ink-muted);
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--line);
-      background: var(--bg-soft);
-      text-transform: uppercase;
-    }
-    .data-table td {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line-soft);
-      font-size: 14px;
-    }
-    .data-table tr:hover { background: var(--bg-soft); }
-
-    /* Status pill */
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-    }
-    .pill-success { background: rgba(74, 124, 89, 0.1); color: var(--success); }
-    .pill-muted   { background: rgba(153, 153, 153, 0.1); color: var(--ink-muted); }
-    .pill-warning { background: rgba(201, 162, 39, 0.12); color: #8a6e15; }
-
-    /* Modal */
-    .modal-backdrop {
-      position: fixed; inset: 0;
-      background: rgba(26, 26, 26, 0.5);
-      backdrop-filter: blur(2px);
-      z-index: 50;
-      display: flex; align-items: center; justify-content: center;
-      padding: 16px;
-    }
-    .modal {
-      background: var(--bg-card);
-      border-radius: 6px;
-      max-width: 520px; width: 100%;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.15);
-    }
-
-    /* Connection indicator */
-    .conn-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      display: inline-block;
-      box-shadow: 0 0 0 0 currentColor;
-    }
-    .conn-on  { background: var(--success); }
-    .conn-off { background: var(--error); animation: pulse 2s infinite; }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0.4; }
-    }
-
-    /* Lock screen */
-    .lock-bg {
-      background:
-        radial-gradient(ellipse 80% 60% at 50% 0%, rgba(184,115,47,0.08), transparent 60%),
-        var(--bg-canvas);
-    }
-
-    /* Mobile adjustments */
-    @media (max-width: 640px) {
-      .tab-link { padding: 12px 14px; font-size: 13px; }
-      .data-table th, .data-table td { padding: 10px 10px; font-size: 13px; }
-    }
-
-    [x-cloak] { display: none !important; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>整体院TAK 経営管理 v2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js"></script>
+<style>
+  [x-cloak] { display: none !important; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; }
+  .tab-active { background:#0f766e; color:white; }
+  .tab-inactive { background:#f1f5f9; color:#334155; }
+  .tab-inactive:hover { background:#e2e8f0; }
+  /* オートコンプリート候補リスト */
+  .suggest-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+</style>
 </head>
-<body>
+<body class="bg-slate-50 min-h-screen" x-data="app()" x-init="init()" x-cloak>
 
-<!-- ============================================================
-     ロック画面(パスコード認証)
-============================================================ -->
-<div x-data="appData()" x-init="init()" x-cloak>
+<!-- ===== ロック画面 ===== -->
+<template x-if="!unlocked">
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+      <div class="text-center mb-6">
+        <div class="text-2xl font-bold text-slate-800">整体院TAK</div>
+        <div class="text-sm text-slate-500 mt-1">経営管理 v2</div>
+      </div>
+      <input type="password" x-model="passcodeInput" @keyup.enter="tryUnlock()"
+        class="w-full px-4 py-3 border border-slate-300 rounded-lg text-center text-2xl tracking-widest"
+        placeholder="パスコード" maxlength="4">
+      <button @click="tryUnlock()"
+        class="w-full mt-4 bg-teal-700 hover:bg-teal-800 text-white font-medium py-3 rounded-lg">
+        入る
+      </button>
+      <div x-show="lockError" class="text-red-500 text-sm text-center mt-3" x-text="lockError"></div>
+    </div>
+  </div>
+</template>
 
-  <div x-show="!authenticated" class="lock-bg min-h-screen flex items-center justify-center px-4">
-    <div class="card p-10 max-w-sm w-full text-center">
-      <div class="font-serif text-3xl mb-1" style="color:var(--accent);">整体院TAK</div>
-      <div class="text-sm tracking-widest" style="color:var(--ink-muted);">経営管理 v2</div>
-      <div class="my-8 h-px" style="background:var(--line);"></div>
-      <label class="label text-left">パスコード</label>
-      <input
-        type="password"
-        inputmode="numeric"
-        maxlength="8"
-        class="input text-center text-xl tabular tracking-widest"
-        x-model="passcodeInput"
-        @keyup.enter="checkPasscode()"
-        autofocus
-      >
-      <button class="btn-primary w-full mt-5" @click="checkPasscode()">入る</button>
-      <p x-show="passcodeError" class="mt-3 text-sm" style="color:var(--error);" x-text="passcodeError"></p>
+<!-- ===== メイン画面 ===== -->
+<template x-if="unlocked">
+<div>
+
+<!-- ヘッダー -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div>
+      <span class="font-bold text-slate-800">整体院TAK</span>
+      <span class="text-slate-400 mx-2">/</span>
+      <span class="text-sm text-slate-600">経営管理 v2</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs px-2 py-1 rounded"
+            :class="cloudStatus==='接続中' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+            x-text="'☁ ' + cloudStatus"></span>
+      <button @click="lock()" class="text-sm text-slate-500 hover:text-slate-800">ロック</button>
     </div>
   </div>
 
-  <!-- ============================================================
-       メインアプリ
-  ============================================================ -->
-  <div x-show="authenticated">
-
-    <!-- ヘッダー -->
-    <header class="bg-white border-b" style="border-color:var(--line);">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
-        <div class="flex items-center gap-3">
-          <div class="font-serif text-lg" style="color:var(--accent);">整体院TAK</div>
-          <span class="text-xs" style="color:var(--ink-muted);">/ 経営管理 v2</span>
-        </div>
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2 text-xs" style="color:var(--ink-muted);">
-            <span class="conn-dot" :class="firestoreReady ? 'conn-on' : 'conn-off'"></span>
-            <span x-text="firestoreReady ? 'クラウド接続中' : '接続待ち'"></span>
-          </div>
-          <button @click="logout()" class="btn-ghost text-xs">ロック</button>
-        </div>
-      </div>
-
-      <!-- タブナビ -->
-      <nav class="border-t overflow-x-auto" style="border-color:var(--line-soft);">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 flex">
-          <template x-for="tab in tabs" :key="tab.id">
-            <button
-              class="tab-link"
-              :class="{'active': currentTab === tab.id}"
-              @click="currentTab = tab.id"
-              x-text="tab.label"
-            ></button>
-          </template>
-        </div>
-      </nav>
-    </header>
-
-    <!-- コンテンツ -->
-    <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-
-      <!-- ▼ ダッシュボード -->
-      <div x-show="currentTab === 'dashboard'">
-        <h1 class="font-serif text-2xl mb-6">ダッシュボード</h1>
-        <div class="card p-12 text-center" style="color:var(--ink-muted);">
-          <p class="mb-2">準備中</p>
-          <p class="text-xs">来院・物販・経費の合計サマリと、未完了アラートを表示予定</p>
-        </div>
-      </div>
-
-      <!-- ▼ 商品マスター -->
-      <div x-show="currentTab === 'products'">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="font-serif text-2xl">商品マスター</h1>
-            <p class="text-sm mt-1" style="color:var(--ink-muted);">
-              物販で扱う商品の登録・編集
-            </p>
-          </div>
-          <button class="btn-primary" @click="openProductModal()">
-            <span class="mr-1">＋</span>新規追加
-          </button>
-        </div>
-
-        <div class="card overflow-hidden">
-          <div x-show="products.length === 0 && firestoreReady" class="p-12 text-center" style="color:var(--ink-muted);">
-            <p class="mb-2">まだ商品が登録されていません</p>
-            <p class="text-xs">右上「新規追加」から登録してください</p>
-          </div>
-
-          <div x-show="!firestoreReady" class="p-12 text-center" style="color:var(--ink-muted);">
-            <p>クラウド接続中...</p>
-          </div>
-
-          <table x-show="products.length > 0" class="data-table">
-            <thead>
-              <tr>
-                <th>商品名</th>
-                <th class="text-right">代理店価格</th>
-                <th class="text-right">販売価格</th>
-                <th class="text-center">税</th>
-                <th class="text-center">月初在庫</th>
-                <th class="text-center">状態</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="p in products" :key="p.id">
-                <tr>
-                  <td>
-                    <div class="font-medium" :class="{'opacity-50': !p.active}" x-text="p.name"></div>
-                  </td>
-                  <td class="text-right tabular" :class="{'opacity-50': !p.active}">
-                    <span x-text="p.dealerPrice ? '¥' + p.dealerPrice.toLocaleString() : '—'"></span>
-                  </td>
-                  <td class="text-right tabular" :class="{'opacity-50': !p.active}">
-                    <span x-text="p.sellingPrice ? '¥' + p.sellingPrice.toLocaleString() : '—'"></span>
-                  </td>
-                  <td class="text-center text-xs" :class="{'opacity-50': !p.active}" x-text="p.taxCategory || '—'"></td>
-                  <td class="text-center tabular" :class="{'opacity-50': !p.active}" x-text="p.initialStock ?? '—'"></td>
-                  <td class="text-center">
-                    <span x-show="p.active" class="pill pill-success">稼働中</span>
-                    <span x-show="!p.active" class="pill pill-muted">停止</span>
-                  </td>
-                  <td class="text-right">
-                    <button class="btn-ghost text-xs" @click="openProductModal(p)">編集</button>
-                    <button class="btn-danger text-xs" @click="deleteProduct(p)">削除</button>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 一括登録ヒント -->
-        <div x-show="products.length === 0 && firestoreReady" class="mt-4 p-4 rounded text-sm" style="background:var(--accent-soft); color:#7a4818;">
-          💡 開発用: <button class="underline" @click="seedProducts()">テスト用に13品目を一括登録</button>
-        </div>
-      </div>
-
-      <!-- ▼ その他のタブ(準備中) -->
-      <template x-for="t in tabs.filter(x => !['dashboard','products'].includes(x.id))" :key="t.id">
-        <div x-show="currentTab === t.id">
-          <h1 class="font-serif text-2xl mb-6" x-text="t.label"></h1>
-          <div class="card p-12 text-center" style="color:var(--ink-muted);">
-            <p class="mb-2">準備中</p>
-            <p class="text-xs">v2.x で順次実装</p>
-          </div>
-        </div>
+  <!-- タブ -->
+  <div class="max-w-6xl mx-auto px-4 pb-2">
+    <div class="flex gap-1 overflow-x-auto">
+      <template x-for="t in tabs" :key="t.id">
+        <button @click="currentTab = t.id"
+          :class="currentTab === t.id ? 'tab-active' : 'tab-inactive'"
+          class="px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap"
+          x-text="t.label"></button>
       </template>
+    </div>
+  </div>
+</header>
 
-    </main>
+<main class="max-w-6xl mx-auto p-4">
 
-    <!-- ============================================================
-         商品 編集/新規 モーダル
-    ============================================================ -->
-    <div x-show="productModal.open" class="modal-backdrop" @click.self="closeProductModal()">
-      <div class="modal p-6 sm:p-8">
-        <h2 class="font-serif text-xl mb-6" x-text="productModal.editing ? '商品を編集' : '商品を新規追加'"></h2>
+  <!-- ====== ダッシュボード ====== -->
+  <section x-show="currentTab==='dashboard'" class="space-y-4">
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-xl font-bold text-slate-800 mb-2">ダッシュボード</h2>
+      <p class="text-sm text-slate-500">準備中</p>
+      <p class="text-sm text-slate-500 mt-1">来院・物販・経費の合計サマリと、未完了アラートを表示予定</p>
+    </div>
+  </section>
 
-        <div class="space-y-5">
-          <div>
-            <label class="label">商品名 <span style="color:var(--error);">*</span></label>
-            <input type="text" class="input" x-model="productModal.data.name" placeholder="例: ヘンププロテイン">
-          </div>
+  <!-- ====== 来院記録 ====== -->
+  <section x-show="currentTab==='visits'" class="space-y-4">
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="label">代理店価格(原価)</label>
-              <input type="number" class="input tabular" x-model.number="productModal.data.dealerPrice" placeholder="2160">
-            </div>
-            <div>
-              <label class="label">販売価格 <span style="color:var(--error);">*</span></label>
-              <input type="number" class="input tabular" x-model.number="productModal.data.sellingPrice" placeholder="3970">
-            </div>
-          </div>
+    <!-- 入力フォーム -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-slate-800">来院記録</h2>
+        <div class="text-xs text-slate-400" x-text="'本日: ' + todayStr()"></div>
+      </div>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="label">消費税区分</label>
-              <select class="input" x-model="productModal.data.taxCategory">
-                <option value="8%">8%(食品系)</option>
-                <option value="10%">10%</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">月初在庫数</label>
-              <input type="number" class="input tabular" x-model.number="productModal.data.initialStock" placeholder="0">
-            </div>
-          </div>
-
-          <div>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" x-model="productModal.data.active" class="w-4 h-4">
-              <span class="text-sm">稼働中(扱っている商品)</span>
-            </label>
-          </div>
-
-          <p x-show="productModal.error" class="text-sm" style="color:var(--error);" x-text="productModal.error"></p>
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <!-- 日付 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">日付 *</label>
+          <input type="date" x-model="visitForm.date"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
 
-        <div class="flex justify-end gap-2 mt-8 pt-5 border-t" style="border-color:var(--line);">
-          <button class="btn-ghost" @click="closeProductModal()">キャンセル</button>
-          <button class="btn-primary" @click="saveProduct()" :disabled="productModal.saving">
-            <span x-show="!productModal.saving">保存</span>
-            <span x-show="productModal.saving">保存中...</span>
-          </button>
+        <!-- 顧客名(オートコンプリート) -->
+        <div class="md:col-span-3 relative">
+          <label class="block text-xs text-slate-600 mb-1">顧客名 *</label>
+          <input type="text" x-model="visitForm.customerName"
+            @input="onCustomerInput()"
+            @focus="showSuggest = true"
+            @blur="setTimeout(() => showSuggest = false, 200)"
+            placeholder="顧客名を入力"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" autocomplete="off">
+          <!-- サジェスト -->
+          <div x-show="showSuggest && filteredCustomers.length > 0"
+               class="suggest-list absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg">
+            <template x-for="c in filteredCustomers" :key="c.id">
+              <button @mousedown.prevent="selectCustomer(c)"
+                class="block w-full text-left px-3 py-2 hover:bg-teal-50 text-sm">
+                <span x-text="c.name"></span>
+                <span x-show="c.visitCount" class="text-xs text-slate-400 ml-2"
+                      x-text="'(' + c.visitCount + '回)'"></span>
+              </button>
+            </template>
+          </div>
         </div>
+
+        <!-- メニュー(自由入力) -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">メニュー *</label>
+          <input type="text" x-model="visitForm.menu"
+            placeholder="例: 整体60分 / 回数券消化"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- 金額 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">金額(円)</label>
+          <input type="number" x-model.number="visitForm.amount" placeholder="0"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- 担当者 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">担当者 *</label>
+          <select x-model="visitForm.staff"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="s in staffList" :key="s">
+              <option :value="s" x-text="s"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 支払方法 -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">支払方法 *</label>
+          <select x-model="visitForm.paymentMethod"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="p in paymentMethods" :key="p">
+              <option :value="p" x-text="p"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 自動判定: cashbookCategory -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">区分(自動判定)</label>
+          <div class="px-3 py-2 bg-slate-100 rounded-lg text-sm text-slate-700"
+               x-text="autoCategory()"></div>
+        </div>
+
+        <!-- 備考 -->
+        <div class="md:col-span-6">
+          <label class="block text-xs text-slate-600 mb-1">備考</label>
+          <input type="text" x-model="visitForm.note" placeholder="任意"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+
+      <!-- 保存ボタン -->
+      <div class="flex justify-end gap-2 mt-4">
+        <button @click="resetVisitForm()"
+          class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">クリア</button>
+        <button @click="saveVisit()" :disabled="!canSaveVisit() || saving"
+          class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg">
+          <span x-show="!saving" x-text="visitForm.id ? '更新' : '保存'"></span>
+          <span x-show="saving">保存中...</span>
+        </button>
+      </div>
+
+      <div x-show="visitMessage" class="mt-3 text-sm"
+           :class="visitMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+           x-text="visitMessage"></div>
+    </div>
+
+    <!-- 月別フィルタ -->
+    <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-slate-600">表示月:</label>
+        <input type="month" x-model="visitFilterMonth"
+               class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+        <button @click="visitFilterMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+      </div>
+      <div class="text-sm text-slate-600">
+        <span x-text="filteredVisits.length"></span>件 / 合計
+        <span class="font-bold text-slate-800" x-text="'¥' + visitTotalAmount().toLocaleString()"></span>
       </div>
     </div>
 
+    <!-- 一覧 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div x-show="filteredVisits.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        この月の来院記録はまだありません
+      </div>
+      <div x-show="filteredVisits.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">日付</th>
+              <th class="px-3 py-2 text-left">顧客名</th>
+              <th class="px-3 py-2 text-left">メニュー</th>
+              <th class="px-3 py-2 text-right">金額</th>
+              <th class="px-3 py-2 text-left">担当</th>
+              <th class="px-3 py-2 text-left">支払</th>
+              <th class="px-3 py-2 text-left">区分</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="v in filteredVisits" :key="v.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="v.date"></td>
+                <td class="px-3 py-2" x-text="v.customerName"></td>
+                <td class="px-3 py-2" x-text="v.menu"></td>
+                <td class="px-3 py-2 text-right" x-text="'¥' + (v.amount||0).toLocaleString()"></td>
+                <td class="px-3 py-2" x-text="v.staff"></td>
+                <td class="px-3 py-2" x-text="v.paymentMethod"></td>
+                <td class="px-3 py-2">
+                  <span class="text-xs px-2 py-0.5 rounded"
+                        :class="categoryColor(v.cashbookCategory)"
+                        x-text="v.cashbookCategory"></span>
+                </td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editVisit(v)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deleteVisit(v)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ====== 商品マスター ====== -->
+  <section x-show="currentTab==='products'" class="space-y-4">
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">商品マスター</h2>
+          <p class="text-xs text-slate-500 mt-1">物販で扱う商品の登録・編集</p>
+        </div>
+        <button @click="openProductModal()"
+          class="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-sm rounded-lg">
+          ＋新規追加
+        </button>
+      </div>
+
+      <div x-show="products.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        まだ商品が登録されていません<br>
+        <span class="text-xs">右上「新規追加」から登録してください</span>
+      </div>
+
+      <div x-show="products.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">商品名</th>
+              <th class="px-3 py-2 text-right">代理店価格</th>
+              <th class="px-3 py-2 text-right">販売価格</th>
+              <th class="px-3 py-2 text-center">税</th>
+              <th class="px-3 py-2 text-right">月初在庫</th>
+              <th class="px-3 py-2 text-center">状態</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in products" :key="p.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2" x-text="p.name"></td>
+                <td class="px-3 py-2 text-right" x-text="p.agencyPrice ? '¥' + p.agencyPrice.toLocaleString() : '-'"></td>
+                <td class="px-3 py-2 text-right" x-text="'¥' + (p.salesPrice||0).toLocaleString()"></td>
+                <td class="px-3 py-2 text-center" x-text="(p.taxRate*100) + '%'"></td>
+                <td class="px-3 py-2 text-right" x-text="p.openingStock||0"></td>
+                <td class="px-3 py-2 text-center">
+                  <span class="text-xs px-2 py-0.5 rounded"
+                        :class="p.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'"
+                        x-text="p.active ? '稼働中' : '停止'"></span>
+                </td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editProduct(p)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deleteProduct(p)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <details class="bg-white rounded-xl shadow p-4 text-sm text-slate-500">
+      <summary class="cursor-pointer">💡 開発用: テスト用に13品目を一括登録</summary>
+      <button @click="seedProducts()" class="mt-3 px-4 py-2 bg-slate-700 text-white rounded-lg text-xs">
+        一括登録実行
+      </button>
+    </details>
+  </section>
+
+  <!-- ====== その他タブ(準備中) ====== -->
+  <template x-for="t in tabs.filter(x => x.placeholder)" :key="t.id">
+    <section x-show="currentTab===t.id">
+      <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-xl font-bold text-slate-800 mb-2" x-text="t.label"></h2>
+        <p class="text-sm text-slate-500">準備中</p>
+        <p class="text-sm text-slate-500 mt-1" x-text="t.note || 'v2.x で順次実装'"></p>
+      </div>
+    </section>
+  </template>
+
+</main>
+
+<!-- ===== 商品マスター モーダル ===== -->
+<div x-show="productModalOpen"
+     class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-40">
+  <div @click.outside="productModalOpen = false"
+       class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+    <h3 class="text-lg font-bold text-slate-800 mb-4"
+        x-text="productForm.id ? '商品を編集' : '商品を追加'"></h3>
+    <div class="space-y-3">
+      <div>
+        <label class="block text-xs text-slate-600 mb-1">商品名 *</label>
+        <input type="text" x-model="productForm.name"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">代理店価格(原価)</label>
+          <input type="number" x-model.number="productForm.agencyPrice"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">販売価格 *</label>
+          <input type="number" x-model.number="productForm.salesPrice"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">消費税区分</label>
+          <select x-model.number="productForm.taxRate"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <option :value="0.08">8%(食品系)</option>
+            <option :value="0.10">10%</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">月初在庫数</label>
+          <input type="number" x-model.number="productForm.openingStock"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-slate-700">
+        <input type="checkbox" x-model="productForm.active">
+        稼働中(扱っている商品)
+      </label>
+    </div>
+    <div class="flex justify-end gap-2 mt-5">
+      <button @click="productModalOpen = false"
+        class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">キャンセル</button>
+      <button @click="saveProduct()" :disabled="!productForm.name || !productForm.salesPrice || saving"
+        class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded-lg">
+        <span x-show="!saving">保存</span>
+        <span x-show="saving">保存中...</span>
+      </button>
+    </div>
   </div>
 </div>
 
-<!-- ============================================================
-     Firebase初期化 (ESM)
-============================================================ -->
+</div>
+</template>
+
+<!-- ===== Firebase + アプリロジック ===== -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-  import {
-    initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-    collection, doc, addDoc, setDoc, deleteDoc, onSnapshot,
-    query, orderBy, serverTimestamp
-  } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  collection, doc, getDocs, setDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
-  // ★ Firebase設定 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  const firebaseConfig = {
-    apiKey: "AIzaSyAIzljpQd7ssjQJCpBrhQ1djPxmpTfDISU",
-    authDomain: "tak-kaikei-v2.firebaseapp.com",
-    projectId: "tak-kaikei-v2",
-    storageBucket: "tak-kaikei-v2.firebasestorage.app",
-    messagingSenderId: "986234863244",
-    appId: "1:986234863244:web:c081ffcb9ce8c53713c5a9"
-  };
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Firebase 設定
+const firebaseConfig = {
+  apiKey: "AIzaSyAIzljpQd7ssjQJCpBrhQ1djPxmpTfDISU",
+  authDomain: "tak-kaikei-v2.firebaseapp.com",
+  projectId: "tak-kaikei-v2",
+  storageBucket: "tak-kaikei-v2.firebasestorage.app",
+  messagingSenderId: "986234863244",
+  appId: "1:986234863244:web:c081ffcb9ce8c53713c5a9"
+};
 
-  const fbApp = initializeApp(firebaseConfig);
+const fbApp = initializeApp(firebaseConfig);
+const db = initializeFirestore(fbApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
 
-  // v11新API: オフラインキャッシュ + 複数タブ対応で初期化
-  let db;
-  try {
-    db = initializeFirestore(fbApp, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
-  } catch (e) {
-    console.warn('Persistence init failed, falling back:', e);
-    db = initializeFirestore(fbApp, {});
-  }
+// グローバルに公開(Alpine から使うため)
+window._fb = {
+  db, collection, doc, getDocs, setDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp
+};
 
-  // グローバル公開(Alpineから利用)
-  window._firebase = {
-    db, collection, doc, addDoc, setDoc, deleteDoc,
-    onSnapshot, query, orderBy, serverTimestamp
-  };
-  window.dispatchEvent(new Event('firebase-ready'));
+// 起動完了通知
+window.dispatchEvent(new Event('firebase-ready'));
 </script>
 
-<!-- ============================================================
-     Alpine データ層 + ロジック
-============================================================ -->
 <script>
-function appData() {
+function app() {
   return {
-    // ─── 認証 ─────────────────────────────────
-    authenticated: false,
+    // ===== UI 状態 =====
+    unlocked: false,
     passcodeInput: '',
-    passcodeError: '',
-    PASSCODE: '1111',  // 後でFirestoreから読むようにする
+    lockError: '',
+    currentTab: 'visits',
+    cloudStatus: '初期化中',
+    saving: false,
+    fbReady: false,
 
-    // ─── 接続状態 ─────────────────────────────
-    firestoreReady: false,
-    unsubscribers: [],
-
-    // ─── タブ ─────────────────────────────────
-    currentTab: 'products',
+    // タブ定義
     tabs: [
-      { id: 'dashboard',  label: 'ダッシュボード' },
-      { id: 'visits',     label: '来院記録' },
-      { id: 'products',   label: '商品マスター' },
-      { id: 'productSales', label: '物販売上' },
-      { id: 'expenses',   label: '経費' },
-      { id: 'adExpenses', label: '広告費' },
-      { id: 'cashbook',   label: '現金出納帳' },
-      { id: 'reports',    label: '月末レポート' },
+      { id: 'dashboard', label: 'ダッシュボード', placeholder: false },
+      { id: 'visits',    label: '来院記録',       placeholder: false },
+      { id: 'products',  label: '商品マスター',   placeholder: false },
+      { id: 'sales',     label: '物販',           placeholder: true,  note: 'v0.3 で実装予定' },
+      { id: 'expenses',  label: '経費',           placeholder: true,  note: 'v0.4 で実装予定' },
+      { id: 'ads',       label: '広告費',         placeholder: true,  note: 'v0.4 で実装予定' },
+      { id: 'cashbook',  label: '現金出納帳',     placeholder: true,  note: 'v0.4 で実装予定' },
+      { id: 'export',    label: '月末出力',       placeholder: true,  note: 'v0.5 で実装予定' },
     ],
 
-    // ─── 商品マスター ─────────────────────────
+    // マスター
+    staffList: ['TAK', '日向'],
+    paymentMethods: ['現金', 'カード', 'PayPay', '銀行振込', '回数券消化', 'サブスク'],
+
+    // ===== データ =====
     products: [],
-    productModal: {
-      open: false,
-      editing: null,
-      saving: false,
-      error: '',
-      data: {
-        name: '',
-        dealerPrice: null,
-        sellingPrice: null,
-        taxCategory: '8%',
-        initialStock: 0,
-        active: true
-      }
-    },
+    customersTemp: [],   // 簡易顧客マスター(自動生成)
+    visits: [],
 
-    emptyProduct() {
-      return {
-        name: '',
-        dealerPrice: null,
-        sellingPrice: null,
-        taxCategory: '8%',
-        initialStock: 0,
-        active: true
-      };
-    },
+    // ===== 来院フォーム =====
+    visitForm: this.emptyVisit(),
+    visitMessage: '',
+    visitMessageType: 'ok',
+    visitFilterMonth: '',
+    showSuggest: false,
 
-    // ─── 起動処理 ─────────────────────────────
+    // ===== 商品フォーム =====
+    productModalOpen: false,
+    productForm: this.emptyProduct(),
+
+    // ===== 初期化 =====
     init() {
-      // セッション内認証(ロックボタンでクリア)
-      this.authenticated = sessionStorage.getItem('tak_auth') === 'yes';
-
-      // Firebase準備完了を待つ
-      if (window._firebase) {
-        this.onFirebaseReady();
-      } else {
-        window.addEventListener('firebase-ready', () => this.onFirebaseReady());
-      }
+      this.visitFilterMonth = this.currentMonthStr();
+      window.addEventListener('firebase-ready', () => {
+        this.fbReady = true;
+        if (this.unlocked) this.subscribeAll();
+      });
     },
 
-    onFirebaseReady() {
-      this.firestoreReady = true;
-      if (this.authenticated) {
-        this.subscribeProducts();
-      }
-    },
-
-    // ─── 認証 ─────────────────────────────────
-    checkPasscode() {
-      if (this.passcodeInput === this.PASSCODE) {
-        this.authenticated = true;
-        sessionStorage.setItem('tak_auth', 'yes');
-        this.passcodeError = '';
+    // ===== ロック =====
+    tryUnlock() {
+      if (this.passcodeInput === '1111') {
+        this.unlocked = true;
         this.passcodeInput = '';
-        if (this.firestoreReady) this.subscribeProducts();
+        this.lockError = '';
+        if (this.fbReady) this.subscribeAll();
       } else {
-        this.passcodeError = 'パスコードが違います';
-        this.passcodeInput = '';
+        this.lockError = 'パスコードが違います';
       }
     },
+    lock() { this.unlocked = true; this.unlocked = false; },
 
-    logout() {
-      this.authenticated = false;
-      sessionStorage.removeItem('tak_auth');
-      // 購読解除
-      this.unsubscribers.forEach(unsub => unsub());
-      this.unsubscribers = [];
+    // ===== Firestore 購読 =====
+    subscribeAll() {
+      const { db, collection, query, orderBy, onSnapshot } = window._fb;
+      this.cloudStatus = '接続中';
+
+      // 商品
+      onSnapshot(query(collection(db, 'products'), orderBy('name')), snap => {
+        this.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+
+      // 来院
+      onSnapshot(query(collection(db, 'visits'), orderBy('date', 'desc')), snap => {
+        this.visits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+
+      // 簡易顧客マスター
+      onSnapshot(collection(db, 'customers_temp'), snap => {
+        this.customersTemp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      });
     },
 
-    // ─── Firestore購読 ───────────────────────
-    subscribeProducts() {
-      const fb = window._firebase;
-      const q = fb.query(fb.collection(fb.db, 'products'), fb.orderBy('name'));
-      const unsub = fb.onSnapshot(q,
-        snap => {
-          this.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        },
-        err => console.error('products snapshot error:', err)
-      );
-      this.unsubscribers.push(unsub);
+    // ===== 共通ユーティリティ =====
+    todayStr() {
+      const d = new Date();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${d.getFullYear()}-${m}-${dd}`;
+    },
+    currentMonthStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     },
 
-    // ─── 商品 CRUD ────────────────────────────
-    openProductModal(product = null) {
-      this.productModal.error = '';
-      if (product) {
-        this.productModal.editing = product.id;
-        this.productModal.data = { ...this.emptyProduct(), ...product };
-      } else {
-        this.productModal.editing = null;
-        this.productModal.data = this.emptyProduct();
-      }
-      this.productModal.open = true;
-    },
-
-    closeProductModal() {
-      this.productModal.open = false;
-    },
-
-    async saveProduct() {
-      const fb = window._firebase;
-      const d = this.productModal.data;
-
-      // バリデーション
-      if (!d.name || !d.name.trim()) {
-        this.productModal.error = '商品名は必須です';
-        return;
-      }
-      if (!d.sellingPrice || d.sellingPrice <= 0) {
-        this.productModal.error = '販売価格を入力してください(0より大)';
-        return;
-      }
-
-      this.productModal.saving = true;
-      this.productModal.error = '';
-
-      const payload = {
-        name: d.name.trim(),
-        dealerPrice: d.dealerPrice || 0,
-        sellingPrice: d.sellingPrice,
-        taxCategory: d.taxCategory || '8%',
-        initialStock: d.initialStock || 0,
-        active: d.active !== false,
-        updatedAt: fb.serverTimestamp()
+    // ===== 来院フォーム =====
+    emptyVisit() {
+      return {
+        id: null,
+        date: this.todayStr ? this.todayStr() : new Date().toISOString().slice(0,10),
+        customerName: '',
+        customerId: null,
+        menu: '',
+        amount: 0,
+        staff: 'TAK',
+        paymentMethod: '現金',
+        note: ''
       };
+    },
+    resetVisitForm() {
+      this.visitForm = this.emptyVisit();
+      this.visitMessage = '';
+    },
+    canSaveVisit() {
+      const v = this.visitForm;
+      return v.date && v.customerName && v.menu && v.staff && v.paymentMethod;
+    },
+
+    // 顧客名オートコンプリート
+    onCustomerInput() {
+      this.showSuggest = true;
+      this.visitForm.customerId = null;  // 入力中はリセット
+    },
+    get filteredCustomers() {
+      const q = (this.visitForm.customerName || '').trim();
+      if (!q) return this.customersTemp.slice(0, 10);
+      return this.customersTemp
+        .filter(c => c.name && c.name.includes(q))
+        .slice(0, 10);
+    },
+    selectCustomer(c) {
+      this.visitForm.customerName = c.name;
+      this.visitForm.customerId = c.id;
+      this.showSuggest = false;
+    },
+
+    // 自動カテゴリ判定(GAS統計v4のロジックを踏襲)
+    autoCategory() {
+      const m = this.visitForm.menu || '';
+      const p = this.visitForm.paymentMethod || '';
+      if (m.includes('会員支払い') || p === 'サブスク') return 'サブスク';
+      if (m.includes('回数券') && (m.includes('購入') || m.includes('券販売'))) return '回数券購入';
+      if (p === '回数券消化' || m.includes('回数券消化')) return '回数券消化';
+      if (m.match(/(浜松|袋井)?(\d+)回券?/) && (m.includes('購入') || m.includes('販売'))) return '回数券購入';
+      return '都度払い';
+    },
+
+    categoryColor(cat) {
+      switch(cat) {
+        case 'サブスク':     return 'bg-purple-100 text-purple-700';
+        case '回数券購入':   return 'bg-blue-100 text-blue-700';
+        case '回数券消化':   return 'bg-sky-100 text-sky-700';
+        case '都度払い':     return 'bg-emerald-100 text-emerald-700';
+        default:             return 'bg-slate-100 text-slate-600';
+      }
+    },
+
+    // 月別フィルタ
+    get filteredVisits() {
+      if (!this.visitFilterMonth) return this.visits;
+      return this.visits.filter(v => (v.date || '').startsWith(this.visitFilterMonth));
+    },
+    visitTotalAmount() {
+      return this.filteredVisits.reduce((s, v) => s + (v.amount || 0), 0);
+    },
+
+    // 保存
+    async saveVisit() {
+      if (!this.canSaveVisit()) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.visitMessage = '';
 
       try {
-        if (this.productModal.editing) {
-          // 更新
-          await fb.setDoc(
-            fb.doc(fb.db, 'products', this.productModal.editing),
-            payload,
-            { merge: true }
-          );
-        } else {
-          // 新規
-          payload.createdAt = fb.serverTimestamp();
-          await fb.addDoc(fb.collection(fb.db, 'products'), payload);
+        const v = this.visitForm;
+        const cat = this.autoCategory();
+
+        // 1. 顧客マスター(自動登録 or リンク)
+        let customerId = v.customerId;
+        if (!customerId) {
+          const existing = this.customersTemp.find(c => c.name === v.customerName.trim());
+          if (existing) {
+            customerId = existing.id;
+          } else {
+            const newRef = doc(collection(db, 'customers_temp'));
+            customerId = newRef.id;
+            await setDoc(newRef, {
+              name: v.customerName.trim(),
+              createdAt: serverTimestamp(),
+              source: 'visit-auto',
+              visitCount: 1
+            });
+          }
         }
-        this.closeProductModal();
+
+        // 2. 来院記録保存
+        const ref = v.id
+          ? doc(db, 'visits', v.id)
+          : doc(collection(db, 'visits'));
+
+        const data = {
+          date: v.date,
+          customerName: v.customerName.trim(),
+          customerId: customerId,
+          menu: v.menu.trim(),
+          amount: v.amount || 0,
+          staff: v.staff,
+          paymentMethod: v.paymentMethod,
+          cashbookCategory: cat,
+          note: v.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (!v.id) data.createdAt = serverTimestamp();
+
+        await setDoc(ref, data, { merge: true });
+
+        this.visitMessage = v.id ? '更新しました' : '保存しました';
+        this.visitMessageType = 'ok';
+        this.resetVisitForm();
+        setTimeout(() => this.visitMessage = '', 2500);
       } catch (e) {
         console.error(e);
-        this.productModal.error = '保存に失敗しました: ' + e.message;
+        this.visitMessage = 'エラー: ' + e.message;
+        this.visitMessageType = 'err';
       } finally {
-        this.productModal.saving = false;
+        this.saving = false;
       }
     },
 
-    async deleteProduct(product) {
-      if (!confirm(`「${product.name}」を削除します。よろしいですか?\n\n※ 過去の物販売上記録には影響しません`)) return;
-      const fb = window._firebase;
+    editVisit(v) {
+      this.visitForm = { ...v };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    async deleteVisit(v) {
+      if (!confirm(`${v.date} ${v.customerName} の記録を削除しますか?`)) return;
+      const { db, doc, deleteDoc } = window._fb;
       try {
-        await fb.deleteDoc(fb.doc(fb.db, 'products', product.id));
+        await deleteDoc(doc(db, 'visits', v.id));
       } catch (e) {
-        console.error(e);
-        alert('削除に失敗しました: ' + e.message);
+        alert('削除エラー: ' + e.message);
       }
     },
 
-    // ─── 開発用: テスト商品13品目を一括登録 ───────
-    async seedProducts() {
-      if (!confirm('テスト用に13品目を登録します。よろしいですか?')) return;
-      const fb = window._firebase;
-      const seedData = [
-        { name: 'ヘンププロテイン', dealerPrice: 2160, sellingPrice: 3970, taxCategory: '8%', initialStock: 5 },
-        { name: '新ヘンププロテイン', dealerPrice: 2484, sellingPrice: 3970, taxCategory: '8%', initialStock: 0 },
-        { name: 'プロテインナチュラ グランプロ', dealerPrice: 4665, sellingPrice: 7766, taxCategory: '8%', initialStock: 10 },
-        { name: 'テラヴィータGP', dealerPrice: 3500, sellingPrice: 5500, taxCategory: '8%', initialStock: 9 },
-        { name: 'カフェインレスコーヒー', dealerPrice: 0, sellingPrice: 0, taxCategory: '8%', initialStock: 2 },
-        { name: 'NMNハイドロハイパー', dealerPrice: 0, sellingPrice: 0, taxCategory: '10%', initialStock: 2 },
-        { name: 'マナ酵素', dealerPrice: 4944, sellingPrice: 9155, taxCategory: '8%', initialStock: 2 },
-        { name: 'グレートマグネシウム', dealerPrice: 2062, sellingPrice: 3078, taxCategory: '10%', initialStock: 13 },
-        { name: 'ルイボスティ', dealerPrice: 0, sellingPrice: 0, taxCategory: '8%', initialStock: 4 },
-        { name: 'タウリン', dealerPrice: 0, sellingPrice: 0, taxCategory: '10%', initialStock: 3 },
-        { name: 'グリーンモンスター', dealerPrice: 0, sellingPrice: 0, taxCategory: '8%', initialStock: 3 },
-        { name: 'オメガ3', dealerPrice: 0, sellingPrice: 0, taxCategory: '10%', initialStock: 2 },
-        { name: 'バスソルト 大', dealerPrice: 0, sellingPrice: 0, taxCategory: '10%', initialStock: 1 },
-      ];
-      for (const item of seedData) {
-        await fb.addDoc(fb.collection(fb.db, 'products'), {
-          ...item,
-          active: true,
-          createdAt: fb.serverTimestamp(),
-          updatedAt: fb.serverTimestamp()
-        });
+    // ===== 商品マスター =====
+    emptyProduct() {
+      return { id: null, name: '', agencyPrice: 0, salesPrice: 0, taxRate: 0.10, openingStock: 0, active: true };
+    },
+    openProductModal() {
+      this.productForm = this.emptyProduct();
+      this.productModalOpen = true;
+    },
+    editProduct(p) {
+      this.productForm = { ...p };
+      this.productModalOpen = true;
+    },
+    async saveProduct() {
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      try {
+        const p = this.productForm;
+        const ref = p.id ? doc(db, 'products', p.id) : doc(collection(db, 'products'));
+        const data = {
+          name: p.name.trim(),
+          agencyPrice: p.agencyPrice || 0,
+          salesPrice: p.salesPrice || 0,
+          taxRate: p.taxRate || 0.10,
+          openingStock: p.openingStock || 0,
+          active: p.active !== false,
+          updatedAt: serverTimestamp()
+        };
+        if (!p.id) data.createdAt = serverTimestamp();
+        await setDoc(ref, data, { merge: true });
+        this.productModalOpen = false;
+      } catch (e) {
+        alert('エラー: ' + e.message);
+      } finally {
+        this.saving = false;
       }
-      alert('13品目登録完了!');
+    },
+    async deleteProduct(p) {
+      if (!confirm(`「${p.name}」を削除しますか?`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'products', p.id));
+      } catch (e) {
+        alert('削除エラー: ' + e.message);
+      }
+    },
+
+    async seedProducts() {
+      if (!confirm('テスト用商品を一括登録します。よろしいですか?')) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      const seeds = [
+        { name: 'NMN サプリ', agencyPrice: 8000, salesPrice: 12000, taxRate: 0.08, openingStock: 0, active: true },
+        { name: 'TeraVita', agencyPrice: 15000, salesPrice: 25000, taxRate: 0.08, openingStock: 0, active: true },
+        { name: 'プロテイン', agencyPrice: 3000, salesPrice: 5500, taxRate: 0.08, openingStock: 0, active: true },
+      ];
+      for (const s of seeds) {
+        const ref = doc(collection(db, 'products'));
+        await setDoc(ref, { ...s, createdAt: serverTimestamp() });
+      }
+      alert('登録しました');
     }
   };
 }
