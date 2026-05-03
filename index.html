@@ -547,6 +547,188 @@
 
   </section>
 
+  <!-- ====== 経費(v0.4) ====== -->
+  <section x-show="currentTab==='expenses'" class="space-y-4">
+
+    <!-- 入力フォーム -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-slate-800">経費記録</h2>
+        <div class="text-xs text-slate-400" x-text="'本日: ' + todayStr()"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <!-- 日付 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">日付 *</label>
+          <input type="date" x-model="expenseForm.date"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- カテゴリ -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">カテゴリ *</label>
+          <select x-model="expenseForm.category"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="c in expenseCategories" :key="c">
+              <option :value="c" x-text="c"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 金額 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">金額(円)*</label>
+          <input type="number" x-model.number="expenseForm.amount" placeholder="0"
+            :disabled="expenseForm.isAutoSample"
+            :class="expenseForm.isAutoSample ? 'bg-slate-100 text-slate-400' : ''"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold">
+        </div>
+
+        <!-- 支払方法 -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">支払方法 *</label>
+          <select x-model="expenseForm.paymentMethod"
+            :disabled="expenseForm.isAutoSample"
+            :class="expenseForm.isAutoSample ? 'bg-slate-100 text-slate-400' : ''"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="p in expensePaymentMethods" :key="p">
+              <option :value="p" x-text="p"></option>
+            </template>
+          </select>
+          <p x-show="expenseForm.paymentMethod === 'その他'" class="text-xs text-slate-500 mt-1">
+            ※「その他」は現金出納帳に乗りません
+          </p>
+        </div>
+
+        <!-- 自動転記バッジ -->
+        <div class="md:col-span-2 flex items-end">
+          <span x-show="expenseForm.isAutoSample"
+                class="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">
+            🔒 自動転記レコード
+          </span>
+        </div>
+
+        <!-- 備考 -->
+        <div class="md:col-span-12">
+          <label class="block text-xs text-slate-600 mb-1">備考</label>
+          <input type="text" x-model="expenseForm.note" placeholder="任意"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+
+      <!-- 保存ボタン -->
+      <div class="flex justify-between gap-2 mt-4 flex-wrap">
+        <button @click="autoTransferSampleCost()"
+          class="px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 rounded-lg border border-orange-200">
+          🔄 サンプル原価を販促費に転記
+        </button>
+        <div class="flex gap-2">
+          <button @click="resetExpenseForm()"
+            class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">クリア</button>
+          <button @click="saveExpense()" :disabled="!canSaveExpense() || saving"
+            class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg">
+            <span x-show="!saving" x-text="expenseForm.id ? '更新' : '保存'"></span>
+            <span x-show="saving">保存中...</span>
+          </button>
+        </div>
+      </div>
+
+      <div x-show="expenseMessage" class="mt-3 text-sm"
+           :class="expenseMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+           x-text="expenseMessage"></div>
+    </div>
+
+    <!-- フィルタ -->
+    <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <label class="text-sm text-slate-600">表示月:</label>
+        <input type="month" x-model="expenseFilterMonth"
+               class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+        <button @click="expenseFilterMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+        <span class="text-slate-300 mx-2">|</span>
+        <label class="text-sm text-slate-600">カテゴリ:</label>
+        <select x-model="expenseFilterCategory"
+                class="px-3 py-1 border border-slate-300 rounded-lg text-sm bg-white">
+          <option value="">全部</option>
+          <template x-for="c in expenseCategories" :key="c">
+            <option :value="c" x-text="c"></option>
+          </template>
+        </select>
+      </div>
+      <div class="text-sm text-slate-600">
+        <span x-text="filteredExpenses.length"></span>件 / 合計
+        <span class="font-bold text-slate-800" x-text="'¥' + expenseTotalAmount().toLocaleString()"></span>
+      </div>
+    </div>
+
+    <!-- カテゴリ別集計 -->
+    <div x-show="expenseByCategory.length > 0" class="bg-white rounded-xl shadow p-5">
+      <h3 class="text-sm font-bold text-slate-700 mb-3">📊 カテゴリ別集計</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">カテゴリ</th>
+              <th class="px-3 py-2 text-right">件数</th>
+              <th class="px-3 py-2 text-right">合計金額</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in expenseByCategory" :key="row.category">
+              <tr class="border-t border-slate-100">
+                <td class="px-3 py-2" x-text="row.category"></td>
+                <td class="px-3 py-2 text-right" x-text="row.count"></td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + row.totalAmount.toLocaleString()"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 一覧 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div x-show="filteredExpenses.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        この月の経費記録はまだありません
+      </div>
+      <div x-show="filteredExpenses.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">日付</th>
+              <th class="px-3 py-2 text-left">カテゴリ</th>
+              <th class="px-3 py-2 text-right">金額</th>
+              <th class="px-3 py-2 text-left">支払</th>
+              <th class="px-3 py-2 text-left">備考</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="e in filteredExpenses" :key="e.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50"
+                  :class="e.isAutoSample ? 'bg-orange-50' : ''">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="e.date"></td>
+                <td class="px-3 py-2">
+                  <span x-text="e.category"></span>
+                  <span x-show="e.isAutoSample" class="ml-1 text-xs bg-orange-200 text-orange-800 px-1 rounded">自動転記</span>
+                </td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + (e.amount||0).toLocaleString()"></td>
+                <td class="px-3 py-2" x-text="e.paymentMethod"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="e.note"></td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editExpense(e)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deleteExpense(e)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
   <!-- ====== その他タブ(準備中) ====== -->
   <template x-for="t in tabs.filter(x => x.placeholder)" :key="t.id">
     <section x-show="currentTab===t.id">
@@ -749,7 +931,7 @@ function app() {
       { id: 'visits',    label: '来院記録',       placeholder: false },
       { id: 'products',  label: '商品マスター',   placeholder: false },
       { id: 'sales',     label: '物販',           placeholder: false },
-      { id: 'expenses',  label: '経費',           placeholder: true,  note: 'v0.4 で実装予定' },
+      { id: 'expenses',  label: '経費',           placeholder: false },
       { id: 'ads',       label: '広告費',         placeholder: true,  note: 'v0.4 で実装予定' },
       { id: 'cashbook',  label: '現金出納帳',     placeholder: true,  note: 'v0.4 で実装予定' },
       { id: 'export',    label: '月末出力',       placeholder: true,  note: 'v0.5 で実装予定' },
@@ -759,11 +941,16 @@ function app() {
     staffList: ['TAK', '日向'],
     paymentMethods: ['現金', 'カード', 'PayPay', '銀行振込', '回数券消化', 'サブスク'],
 
+    // 経費・広告費用(v0.4)
+    expensePaymentMethods: ['現金', 'カード', '銀行振込', 'PayPay', 'その他'],
+    expenseCategories: ['仕入', '販促費', '家賃', '光熱費', '通信費', '消耗品', '交通費', 'その他'],
+
     // ===== データ =====
     products: [],
     customersTemp: [],   // 簡易顧客マスター(自動生成)
     visits: [],
     sales: [],
+    expenses: [],   // 経費(v0.4)
 
     // ===== 来院フォーム =====
     visitForm: { id: null, date: '', customerName: '', customerId: null, menu: '', amount: 0, staff: 'TAK', paymentMethod: '現金', note: '' },
@@ -793,13 +980,26 @@ function app() {
     salesBulkPreview: [],
     salesBulkError: '',
 
+    // ===== 経費フォーム(v0.4) =====
+    expenseForm: {
+      id: null, date: '', category: '仕入', amount: 0,
+      paymentMethod: '現金', note: '',
+      isAutoSample: false, sampleMonth: null
+    },
+    expenseMessage: '',
+    expenseMessageType: 'ok',
+    expenseFilterMonth: '',
+    expenseFilterCategory: '',  // 空=全部
+
     // ===== 初期化 =====
     init() {
       this.visitForm = this.emptyVisit();
       this.productForm = this.emptyProduct();
       this.salesForm = this.emptySale();
+      this.expenseForm = this.emptyExpense();
       this.visitFilterMonth = this.currentMonthStr();
       this.salesFilterMonth = this.currentMonthStr();
+      this.expenseFilterMonth = this.currentMonthStr();
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -842,6 +1042,11 @@ function app() {
       // 物販
       onSnapshot(query(collection(db, 'sales'), orderBy('date', 'desc')), snap => {
         this.sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+
+      // 経費(v0.4)
+      onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => {
+        this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
     },
 
@@ -1360,9 +1565,218 @@ function app() {
       } finally {
         this.saving = false;
       }
-    }
+    },
 
     // ===== /v0.3 物販機能 =====
+
+    // ============================================
+    // ===== v0.4 経費機能 =====
+    // ============================================
+
+    emptyExpense() {
+      return {
+        id: null,
+        date: this.todayStr(),
+        category: '仕入',
+        amount: 0,
+        paymentMethod: '現金',
+        note: '',
+        isAutoSample: false,
+        sampleMonth: null
+      };
+    },
+
+    resetExpenseForm() {
+      this.expenseForm = this.emptyExpense();
+      this.expenseMessage = '';
+    },
+
+    canSaveExpense() {
+      const e = this.expenseForm;
+      return e.date && e.category && e.amount > 0 && e.paymentMethod;
+    },
+
+    get filteredExpenses() {
+      let list = this.expenses;
+      if (this.expenseFilterMonth) {
+        list = list.filter(e => (e.date || '').startsWith(this.expenseFilterMonth));
+      }
+      if (this.expenseFilterCategory) {
+        list = list.filter(e => e.category === this.expenseFilterCategory);
+      }
+      return list;
+    },
+
+    expenseTotalAmount() {
+      return this.filteredExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    },
+
+    get expenseByCategory() {
+      const map = {};
+      for (const e of this.filteredExpenses) {
+        const key = e.category || '(未分類)';
+        if (!map[key]) {
+          map[key] = { category: key, count: 0, totalAmount: 0 };
+        }
+        map[key].count++;
+        map[key].totalAmount += Number(e.amount) || 0;
+      }
+      return Object.values(map).sort((a, b) => b.totalAmount - a.totalAmount);
+    },
+
+    async saveExpense() {
+      if (!this.canSaveExpense()) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.expenseMessage = '';
+
+      try {
+        const e = this.expenseForm;
+        const ref = e.id
+          ? doc(db, 'expenses', e.id)
+          : doc(collection(db, 'expenses'));
+
+        const data = {
+          date: e.date,
+          category: e.category,
+          amount: Number(e.amount) || 0,
+          paymentMethod: e.paymentMethod,
+          note: e.note || '',
+          isAutoSample: !!e.isAutoSample,
+          sampleMonth: e.sampleMonth || null,
+          updatedAt: serverTimestamp()
+        };
+        if (!e.id) data.createdAt = serverTimestamp();
+
+        await setDoc(ref, data, { merge: true });
+
+        this.expenseMessage = e.id ? '更新しました' : '保存しました';
+        this.expenseMessageType = 'ok';
+        this.resetExpenseForm();
+        setTimeout(() => this.expenseMessage = '', 2500);
+      } catch (err) {
+        console.error(err);
+        this.expenseMessage = 'エラー: ' + err.message;
+        this.expenseMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    editExpense(e) {
+      this.expenseForm = { ...e };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    async deleteExpense(e) {
+      const label = e.isAutoSample
+        ? '自動転記レコード'
+        : `${e.date} ${e.category} ¥${(e.amount||0).toLocaleString()}`;
+      if (!confirm(`${label} を削除しますか?`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'expenses', e.id));
+      } catch (err) {
+        alert('削除エラー: ' + err.message);
+      }
+    },
+
+    // サンプル原価の自動転記
+    async autoTransferSampleCost() {
+      const month = this.expenseFilterMonth || this.currentMonthStr();
+      if (!month) {
+        alert('表示月を選択してください');
+        return;
+      }
+
+      // 該当月のサンプル提供を sales から集計
+      const monthSales = this.sales.filter(s =>
+        s.isSample && (s.date || '').startsWith(month)
+      );
+
+      if (monthSales.length === 0) {
+        alert(`${month} にサンプル提供記録がありません`);
+        return;
+      }
+
+      // 商品ごとに数量集計 → 原価×数量で合計
+      const breakdown = {};
+      let totalCost = 0;
+      for (const s of monthSales) {
+        const prod = this.products.find(p => p.id === s.productId || p.name === s.productName);
+        const dealerPrice = prod ? (Number(prod.dealerPrice) || 0) : 0;
+        const qty = Number(s.quantity) || 0;
+        const cost = dealerPrice * qty;
+        const key = s.productName || '(不明)';
+        if (!breakdown[key]) breakdown[key] = { qty: 0, cost: 0 };
+        breakdown[key].qty += qty;
+        breakdown[key].cost += cost;
+        totalCost += cost;
+      }
+
+      if (totalCost === 0) {
+        alert('原価情報が登録されていない商品ばかりです。商品マスターで「代理店価格」を設定してください');
+        return;
+      }
+
+      const noteParts = Object.entries(breakdown)
+        .map(([name, v]) => `${name}×${v.qty}(¥${v.cost.toLocaleString()})`)
+        .join(' / ');
+      const noteText = `[自動]サンプル原価 ${noteParts}`;
+
+      // 既存の同月自動レコードを検索
+      const existing = this.expenses.find(e => e.isAutoSample && e.sampleMonth === month);
+
+      const msg = existing
+        ? `${month} の自動転記レコードが既にあります(¥${(existing.amount||0).toLocaleString()})。\n¥${totalCost.toLocaleString()} で上書きしますか?`
+        : `${month} のサンプル原価 ¥${totalCost.toLocaleString()} を販促費として転記しますか?\n\n${noteText}`;
+
+      if (!confirm(msg)) return;
+
+      const { db, collection, doc, setDoc, deleteDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+
+      try {
+        // 既存があれば削除
+        if (existing) {
+          await deleteDoc(doc(db, 'expenses', existing.id));
+        }
+
+        // 月末日付に転記
+        const lastDay = this.lastDayOfMonth(month);
+
+        const ref = doc(collection(db, 'expenses'));
+        await setDoc(ref, {
+          date: lastDay,
+          category: '販促費',
+          amount: totalCost,
+          paymentMethod: 'その他',  // 現金出納帳に乗らない
+          note: noteText,
+          isAutoSample: true,
+          sampleMonth: month,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+
+        this.expenseMessage = `サンプル原価 ¥${totalCost.toLocaleString()} を転記しました`;
+        this.expenseMessageType = 'ok';
+        setTimeout(() => this.expenseMessage = '', 4000);
+      } catch (err) {
+        console.error(err);
+        alert('転記エラー: ' + err.message);
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    lastDayOfMonth(yyyymm) {
+      // "2026-05" → "2026-05-31"
+      const [y, m] = yyyymm.split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();  // 翌月0日 = 当月末日
+      return `${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+    }
+
+    // ===== /v0.4 経費機能 =====
   };
 }
 </script>
