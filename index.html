@@ -729,6 +729,168 @@
 
   </section>
 
+  <!-- ====== 広告費(v0.4 第2弾) ====== -->
+  <section x-show="currentTab==='ads'" class="space-y-4">
+
+    <!-- 入力フォーム -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-slate-800">広告費記録</h2>
+        <div class="text-xs text-slate-400" x-text="'本日: ' + todayStr()"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <!-- 日付 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">日付 *</label>
+          <input type="date" x-model="adForm.date"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- カテゴリ -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">媒体 *</label>
+          <select x-model="adForm.category"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="c in adCategories" :key="c">
+              <option :value="c" x-text="c"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 金額 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">金額(円)*</label>
+          <input type="number" x-model.number="adForm.amount" placeholder="0"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold">
+        </div>
+
+        <!-- 支払方法 -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">支払方法 *</label>
+          <select x-model="adForm.paymentMethod"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="p in expensePaymentMethods" :key="p">
+              <option :value="p" x-text="p"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 余白 -->
+        <div class="md:col-span-2"></div>
+
+        <!-- 備考 -->
+        <div class="md:col-span-12">
+          <label class="block text-xs text-slate-600 mb-1">備考(キャンペーン名など)</label>
+          <input type="text" x-model="adForm.note" placeholder="任意"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+
+      <!-- 保存ボタン -->
+      <div class="flex justify-end gap-2 mt-4">
+        <button @click="resetAdForm()"
+          class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">クリア</button>
+        <button @click="saveAd()" :disabled="!canSaveAd() || saving"
+          class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg">
+          <span x-show="!saving" x-text="adForm.id ? '更新' : '保存'"></span>
+          <span x-show="saving">保存中...</span>
+        </button>
+      </div>
+
+      <div x-show="adMessage" class="mt-3 text-sm"
+           :class="adMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+           x-text="adMessage"></div>
+    </div>
+
+    <!-- フィルタ -->
+    <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <label class="text-sm text-slate-600">表示月:</label>
+        <input type="month" x-model="adFilterMonth"
+               class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+        <button @click="adFilterMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+        <span class="text-slate-300 mx-2">|</span>
+        <label class="text-sm text-slate-600">媒体:</label>
+        <select x-model="adFilterCategory"
+                class="px-3 py-1 border border-slate-300 rounded-lg text-sm bg-white">
+          <option value="">全部</option>
+          <template x-for="c in adCategories" :key="c">
+            <option :value="c" x-text="c"></option>
+          </template>
+        </select>
+      </div>
+      <div class="text-sm text-slate-600">
+        <span x-text="filteredAds.length"></span>件 / 合計
+        <span class="font-bold text-slate-800" x-text="'¥' + adTotalAmount().toLocaleString()"></span>
+      </div>
+    </div>
+
+    <!-- 媒体別集計 -->
+    <div x-show="adByCategory.length > 0" class="bg-white rounded-xl shadow p-5">
+      <h3 class="text-sm font-bold text-slate-700 mb-3">📊 媒体別集計</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">媒体</th>
+              <th class="px-3 py-2 text-right">件数</th>
+              <th class="px-3 py-2 text-right">合計金額</th>
+              <th class="px-3 py-2 text-right">構成比</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in adByCategory" :key="row.category">
+              <tr class="border-t border-slate-100">
+                <td class="px-3 py-2" x-text="row.category"></td>
+                <td class="px-3 py-2 text-right" x-text="row.count"></td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + row.totalAmount.toLocaleString()"></td>
+                <td class="px-3 py-2 text-right text-slate-500" x-text="row.percent + '%'"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 一覧 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div x-show="filteredAds.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        この月の広告費記録はまだありません
+      </div>
+      <div x-show="filteredAds.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">日付</th>
+              <th class="px-3 py-2 text-left">媒体</th>
+              <th class="px-3 py-2 text-right">金額</th>
+              <th class="px-3 py-2 text-left">支払</th>
+              <th class="px-3 py-2 text-left">備考</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="a in filteredAds" :key="a.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="a.date"></td>
+                <td class="px-3 py-2" x-text="a.category"></td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + (a.amount||0).toLocaleString()"></td>
+                <td class="px-3 py-2" x-text="a.paymentMethod"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="a.note"></td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editAd(a)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deleteAd(a)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
   <!-- ====== その他タブ(準備中) ====== -->
   <template x-for="t in tabs.filter(x => x.placeholder)" :key="t.id">
     <section x-show="currentTab===t.id">
@@ -932,7 +1094,7 @@ function app() {
       { id: 'products',  label: '商品マスター',   placeholder: false },
       { id: 'sales',     label: '物販',           placeholder: false },
       { id: 'expenses',  label: '経費',           placeholder: false },
-      { id: 'ads',       label: '広告費',         placeholder: true,  note: 'v0.4 で実装予定' },
+      { id: 'ads',       label: '広告費',         placeholder: false },
       { id: 'cashbook',  label: '現金出納帳',     placeholder: true,  note: 'v0.4 で実装予定' },
       { id: 'export',    label: '月末出力',       placeholder: true,  note: 'v0.5 で実装予定' },
     ],
@@ -944,6 +1106,7 @@ function app() {
     // 経費・広告費用(v0.4)
     expensePaymentMethods: ['現金', 'カード', '銀行振込', 'PayPay', 'その他'],
     expenseCategories: ['仕入', '販促費', '家賃', '光熱費', '通信費', '消耗品', '交通費', 'その他'],
+    adCategories: ['紹介', 'Instagram広告', '折込チラシ', 'LINEリッチメニュー', 'GoogleMap', 'ポスティング'],
 
     // ===== データ =====
     products: [],
@@ -951,6 +1114,7 @@ function app() {
     visits: [],
     sales: [],
     expenses: [],   // 経費(v0.4)
+    ads: [],        // 広告費(v0.4 第2弾)
 
     // ===== 来院フォーム =====
     visitForm: { id: null, date: '', customerName: '', customerId: null, menu: '', amount: 0, staff: 'TAK', paymentMethod: '現金', note: '' },
@@ -991,15 +1155,27 @@ function app() {
     expenseFilterMonth: '',
     expenseFilterCategory: '',  // 空=全部
 
+    // ===== 広告費フォーム(v0.4 第2弾) =====
+    adForm: {
+      id: null, date: '', category: 'Instagram広告', amount: 0,
+      paymentMethod: 'カード', note: ''
+    },
+    adMessage: '',
+    adMessageType: 'ok',
+    adFilterMonth: '',
+    adFilterCategory: '',
+
     // ===== 初期化 =====
     init() {
       this.visitForm = this.emptyVisit();
       this.productForm = this.emptyProduct();
       this.salesForm = this.emptySale();
       this.expenseForm = this.emptyExpense();
+      this.adForm = this.emptyAd();
       this.visitFilterMonth = this.currentMonthStr();
       this.salesFilterMonth = this.currentMonthStr();
       this.expenseFilterMonth = this.currentMonthStr();
+      this.adFilterMonth = this.currentMonthStr();
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -1047,6 +1223,11 @@ function app() {
       // 経費(v0.4)
       onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => {
         this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+
+      // 広告費(v0.4 第2弾)
+      onSnapshot(query(collection(db, 'ads'), orderBy('date', 'desc')), snap => {
+        this.ads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
     },
 
@@ -1774,9 +1955,122 @@ function app() {
       const [y, m] = yyyymm.split('-').map(Number);
       const last = new Date(y, m, 0).getDate();  // 翌月0日 = 当月末日
       return `${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
-    }
+    },
 
     // ===== /v0.4 経費機能 =====
+
+    // ============================================
+    // ===== v0.4 第2弾 広告費機能 =====
+    // ============================================
+
+    emptyAd() {
+      return {
+        id: null,
+        date: this.todayStr(),
+        category: 'Instagram広告',
+        amount: 0,
+        paymentMethod: 'カード',
+        note: ''
+      };
+    },
+
+    resetAdForm() {
+      this.adForm = this.emptyAd();
+      this.adMessage = '';
+    },
+
+    canSaveAd() {
+      const a = this.adForm;
+      return a.date && a.category && a.amount > 0 && a.paymentMethod;
+    },
+
+    get filteredAds() {
+      let list = this.ads;
+      if (this.adFilterMonth) {
+        list = list.filter(a => (a.date || '').startsWith(this.adFilterMonth));
+      }
+      if (this.adFilterCategory) {
+        list = list.filter(a => a.category === this.adFilterCategory);
+      }
+      return list;
+    },
+
+    adTotalAmount() {
+      return this.filteredAds.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+    },
+
+    get adByCategory() {
+      const map = {};
+      const total = this.filteredAds.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+      for (const a of this.filteredAds) {
+        const key = a.category || '(未分類)';
+        if (!map[key]) {
+          map[key] = { category: key, count: 0, totalAmount: 0, percent: 0 };
+        }
+        map[key].count++;
+        map[key].totalAmount += Number(a.amount) || 0;
+      }
+      const arr = Object.values(map);
+      // 構成比計算
+      for (const row of arr) {
+        row.percent = total > 0 ? Math.round((row.totalAmount / total) * 1000) / 10 : 0;
+      }
+      return arr.sort((a, b) => b.totalAmount - a.totalAmount);
+    },
+
+    async saveAd() {
+      if (!this.canSaveAd()) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.adMessage = '';
+
+      try {
+        const a = this.adForm;
+        const ref = a.id
+          ? doc(db, 'ads', a.id)
+          : doc(collection(db, 'ads'));
+
+        const data = {
+          date: a.date,
+          category: a.category,
+          amount: Number(a.amount) || 0,
+          paymentMethod: a.paymentMethod,
+          note: a.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (!a.id) data.createdAt = serverTimestamp();
+
+        await setDoc(ref, data, { merge: true });
+
+        this.adMessage = a.id ? '更新しました' : '保存しました';
+        this.adMessageType = 'ok';
+        this.resetAdForm();
+        setTimeout(() => this.adMessage = '', 2500);
+      } catch (err) {
+        console.error(err);
+        this.adMessage = 'エラー: ' + err.message;
+        this.adMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    editAd(a) {
+      this.adForm = { ...a };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    async deleteAd(a) {
+      if (!confirm(`${a.date} ${a.category} ¥${(a.amount||0).toLocaleString()} を削除しますか?`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'ads', a.id));
+      } catch (err) {
+        alert('削除エラー: ' + err.message);
+      }
+    }
+
+    // ===== /v0.4 第2弾 広告費機能 =====
   };
 }
 </script>
