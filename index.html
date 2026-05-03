@@ -6,6 +6,9 @@
 <title>整体院TAK 経営管理 v2</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js"></script>
+<!-- v0.5: SheetJS + JSZip -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   [x-cloak] { display: none !important; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; }
@@ -67,8 +70,13 @@
       <template x-for="t in tabs" :key="t.id">
         <button @click="currentTab = t.id"
           :class="currentTab === t.id ? 'tab-active' : 'tab-inactive'"
-          class="px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap"
-          x-text="t.label"></button>
+          class="px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap relative">
+          <span x-text="t.label"></span>
+          <!-- 🆕 v0.5: 月末出力タブの未出力バッジ -->
+          <span x-show="t.id === 'export' && pendingExports.length > 0"
+                class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                x-text="pendingExports.length"></span>
+        </button>
       </template>
     </div>
   </div>
@@ -891,7 +899,7 @@
 
   </section>
 
-  <!-- ====== 現金出納帳(v0.4 第3弾) ====== -->
+  <!-- ====== 現金出納帳(v0.4 第3弾 + v0.5 銀行預け入れ) ====== -->
   <section x-show="currentTab==='cashbook'" class="space-y-4">
 
     <!-- ヘッダー: 月選択・月初繰越 -->
@@ -936,6 +944,93 @@
       <div x-show="cashbookMessage" class="mt-3 text-sm"
            :class="cashbookMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
            x-text="cashbookMessage"></div>
+    </div>
+
+    <!-- 🆕 v0.5: 銀行預け入れ -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div>
+          <h3 class="text-base font-bold text-slate-800">🏦 現金入金(銀行預け入れ)</h3>
+          <p class="text-xs text-slate-500 mt-1">
+            現金売上を銀行に預け入れた金額を記録します。経費ではなく資金移動として扱われます。
+          </p>
+        </div>
+      </div>
+
+      <!-- 入力フォーム -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">日付 *</label>
+          <input type="date" x-model="depositForm.date"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">金額(円)*</label>
+          <input type="number" x-model.number="depositForm.amount" placeholder="0"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">銀行(任意)</label>
+          <input type="text" x-model="depositForm.bankName" placeholder="ゆうちょ"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">メモ(任意)</label>
+          <input type="text" x-model="depositForm.note"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div class="md:col-span-2 flex items-end gap-2">
+          <button @click="resetDepositForm()"
+            class="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">クリア</button>
+          <button @click="saveDeposit()" :disabled="!canSaveDeposit() || saving"
+            class="flex-1 px-4 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg">
+            <span x-show="!depositForm.id">+ 追加</span>
+            <span x-show="depositForm.id">更新</span>
+          </button>
+        </div>
+      </div>
+
+      <div x-show="depositMessage" class="mt-3 text-sm"
+           :class="depositMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+           x-text="depositMessage"></div>
+
+      <!-- 一覧 -->
+      <div x-show="depositsForCurrentMonth.length > 0" class="mt-4 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">日付</th>
+              <th class="px-3 py-2 text-right">金額</th>
+              <th class="px-3 py-2 text-left">銀行</th>
+              <th class="px-3 py-2 text-left">メモ</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="d in depositsForCurrentMonth" :key="d.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="d.date"></td>
+                <td class="px-3 py-2 text-right font-bold text-red-500"
+                    x-text="'¥' + (d.amount||0).toLocaleString()"></td>
+                <td class="px-3 py-2" x-text="d.bankName || '-'"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="d.note"></td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editDeposit(d)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deleteDeposit(d)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+            <tr class="border-t-2 border-slate-300 bg-slate-50">
+              <td class="px-3 py-2 font-bold">合計</td>
+              <td class="px-3 py-2 text-right font-bold text-red-600"
+                  x-text="'¥' + depositTotalAmount().toLocaleString()"></td>
+              <td colspan="3"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p x-show="depositsForCurrentMonth.length === 0"
+         class="text-sm text-slate-400 mt-3">この月の預け入れ記録はまだありません</p>
     </div>
 
     <!-- サマリカード -->
@@ -1006,7 +1101,8 @@
                             '来院': 'bg-emerald-100 text-emerald-700',
                             '物販': 'bg-purple-100 text-purple-700',
                             '経費': 'bg-amber-100 text-amber-700',
-                            '広告費': 'bg-pink-100 text-pink-700'
+                            '広告費': 'bg-pink-100 text-pink-700',
+                            '預入': 'bg-blue-100 text-blue-700'
                           }[e.type] || 'bg-slate-100 text-slate-600'"
                           x-text="e.type"></span>
                   </td>
@@ -1117,15 +1213,122 @@
     </div>
 
   </section>
-  <template x-for="t in tabs.filter(x => x.placeholder)" :key="t.id">
-    <section x-show="currentTab===t.id">
-      <div class="bg-white rounded-xl shadow p-6">
-        <h2 class="text-xl font-bold text-slate-800 mb-2" x-text="t.label"></h2>
-        <p class="text-sm text-slate-500">準備中</p>
-        <p class="text-sm text-slate-500 mt-1" x-text="t.note || 'v2.x で順次実装'"></p>
+
+  <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
+  <section x-show="currentTab==='export'" class="space-y-4">
+
+    <!-- 未出力アラート -->
+    <div x-show="pendingExports.length > 0"
+         class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl">
+      <div class="flex items-start">
+        <span class="text-2xl mr-3">⚠️</span>
+        <div class="flex-1">
+          <p class="font-bold text-amber-900">未出力の月があります</p>
+          <p class="text-sm text-amber-800 mt-1">月末提出資料の作成をお忘れなく</p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <template x-for="ym in pendingExports" :key="ym">
+              <button @click="exportMonth = ym"
+                      class="text-xs px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded">
+                <span x-text="ym"></span> を選択
+              </button>
+            </template>
+          </div>
+        </div>
       </div>
-    </section>
-  </template>
+    </div>
+
+    <!-- メインカード -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-xl font-bold text-slate-800 mb-2">📤 月末Excel出力</h2>
+      <p class="text-sm text-slate-500 mb-4">
+        日向さん提出用の月末資料(現金出納帳・物販管理表・広告費内訳)を一括ZIP出力します。
+      </p>
+
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        <label class="text-sm text-slate-600">対象月:</label>
+        <input type="month" x-model="exportMonth"
+               class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        <span x-show="isMonthExported(exportMonth)"
+              class="text-sm text-emerald-600 font-medium"
+              x-text="'✓ 出力済み(' + formatExportDate(exportMonth) + ')'"></span>
+        <span x-show="!isMonthExported(exportMonth)" class="text-sm text-slate-500">未出力</span>
+      </div>
+
+      <button @click="generateMonthEndZip()"
+              :disabled="isGeneratingExcel"
+              class="px-6 py-3 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white font-bold rounded-lg shadow">
+        <span x-show="!isGeneratingExcel">📥 ZIPダウンロード(3ファイル一括)</span>
+        <span x-show="isGeneratingExcel">生成中...</span>
+      </button>
+
+      <div x-show="excelGenerationLog.length > 0"
+           class="mt-4 bg-slate-50 rounded p-3 text-sm font-mono">
+        <template x-for="(log, i) in excelGenerationLog" :key="i">
+          <div class="text-slate-700" x-text="log"></div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ファイル一覧プレビュー -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h3 class="font-bold text-slate-800 mb-3">📦 出力されるファイル</h3>
+      <div class="space-y-2">
+        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded">
+          <span class="text-2xl">💰</span>
+          <div class="flex-1">
+            <div class="font-medium text-sm" x-text="exportMonth + '_現金出納帳.xlsx'"></div>
+            <div class="text-xs text-slate-500">繰越→明細(伝票No+銀行預け入れ)→月末残高</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded">
+          <span class="text-2xl">📦</span>
+          <div class="flex-1">
+            <div class="font-medium text-sm" x-text="exportMonth + '_物販管理表.xlsx'"></div>
+            <div class="text-xs text-slate-500">商品別ブロック(在庫推移+販売記録)</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded">
+          <span class="text-2xl">📣</span>
+          <div class="flex-1">
+            <div class="font-medium text-sm" x-text="exportMonth + '_広告費内訳.xlsx'"></div>
+            <div class="text-xs text-slate-500">媒体別合計+構成比</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 出力履歴 -->
+    <div class="bg-white rounded-xl shadow p-6">
+      <h3 class="font-bold text-slate-800 mb-3">📋 出力履歴</h3>
+      <div x-show="exportHistory.length === 0" class="text-sm text-slate-400">
+        まだ出力履歴がありません
+      </div>
+      <div x-show="exportHistory.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">対象月</th>
+              <th class="px-3 py-2 text-left">出力日時</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="h in exportHistory" :key="h.yearMonth">
+              <tr class="border-t border-slate-100">
+                <td class="px-3 py-2 font-medium" x-text="h.yearMonth"></td>
+                <td class="px-3 py-2 text-slate-600" x-text="h.exportedAtStr"></td>
+                <td class="px-3 py-2 text-right">
+                  <button @click="exportMonth = h.yearMonth; generateMonthEndZip()"
+                          class="text-xs text-teal-700 hover:underline">再出力</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
 
 </main>
 
@@ -1321,7 +1524,7 @@ function app() {
       { id: 'expenses',  label: '経費',           placeholder: false },
       { id: 'ads',       label: '広告費',         placeholder: false },
       { id: 'cashbook',  label: '現金出納帳',     placeholder: false },
-      { id: 'export',    label: '月末出力',       placeholder: true,  note: 'v0.5 で実装予定' },
+      { id: 'export',    label: '月末出力',       placeholder: false },
     ],
 
     // マスター
@@ -1335,11 +1538,13 @@ function app() {
 
     // ===== データ =====
     products: [],
-    customersTemp: [],   // 簡易顧客マスター(自動生成)
+    customersTemp: [],
     visits: [],
     sales: [],
-    expenses: [],   // 経費(v0.4)
-    ads: [],        // 広告費(v0.4 第2弾)
+    expenses: [],
+    ads: [],
+    cashDeposits: [],   // 🆕 v0.5
+    monthlyExports: [], // 🆕 v0.5
 
     // ===== 来院フォーム =====
     visitForm: { id: null, date: '', customerName: '', customerId: null, menu: '', amount: 0, staff: 'TAK', paymentMethod: '現金', note: '' },
@@ -1378,7 +1583,7 @@ function app() {
     expenseMessage: '',
     expenseMessageType: 'ok',
     expenseFilterMonth: '',
-    expenseFilterCategory: '',  // 空=全部
+    expenseFilterCategory: '',
 
     // ===== 広告費フォーム(v0.4 第2弾) =====
     adForm: {
@@ -1392,13 +1597,25 @@ function app() {
 
     // ===== 現金出納帳(v0.4 第3弾) =====
     cashbookMonth: '',
-    cashbookSubTab: 'detail',  // 'detail' | 'category'
-    cashbookCarry: 0,           // 月初繰越残高
+    cashbookSubTab: 'detail',
+    cashbookCarry: 0,
     cashbookCarryIsManual: false,
     cashbookCarryEditing: false,
     cashbookCarryEditValue: 0,
     cashbookMessage: '',
     cashbookMessageType: 'ok',
+
+    // ===== 🆕 v0.5: 銀行預け入れフォーム =====
+    depositForm: {
+      id: null, date: '', amount: 0, bankName: '', note: ''
+    },
+    depositMessage: '',
+    depositMessageType: 'ok',
+
+    // ===== 🆕 v0.5: 月末Excel出力 =====
+    exportMonth: '',
+    isGeneratingExcel: false,
+    excelGenerationLog: [],
 
     // ===== 初期化 =====
     init() {
@@ -1407,11 +1624,13 @@ function app() {
       this.salesForm = this.emptySale();
       this.expenseForm = this.emptyExpense();
       this.adForm = this.emptyAd();
+      this.depositForm = this.emptyDeposit();
       this.visitFilterMonth = this.currentMonthStr();
       this.salesFilterMonth = this.currentMonthStr();
       this.expenseFilterMonth = this.currentMonthStr();
       this.adFilterMonth = this.currentMonthStr();
       this.cashbookMonth = this.currentMonthStr();
+      this.exportMonth = this.prevMonth(this.currentMonthStr());  // デフォルト前月
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -1436,35 +1655,53 @@ function app() {
       const { db, collection, query, orderBy, onSnapshot } = window._fb;
       this.cloudStatus = '接続中';
 
-      // 商品
       onSnapshot(query(collection(db, 'products'), orderBy('name')), snap => {
         this.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
 
-      // 来院
       onSnapshot(query(collection(db, 'visits'), orderBy('date', 'desc')), snap => {
         this.visits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
 
-      // 簡易顧客マスター
       onSnapshot(collection(db, 'customers_temp'), snap => {
         this.customersTemp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       });
 
-      // 物販
       onSnapshot(query(collection(db, 'sales'), orderBy('date', 'desc')), snap => {
         this.sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
 
-      // 経費(v0.4)
       onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => {
         this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
 
-      // 広告費(v0.4 第2弾)
       onSnapshot(query(collection(db, 'ads'), orderBy('date', 'desc')), snap => {
         this.ads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+
+      // 🆕 v0.5: 銀行預け入れ購読
+      onSnapshot(query(collection(db, 'cash_deposits'), orderBy('date', 'desc')), snap => {
+        this.cashDeposits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error(err); });
+
+      // 🆕 v0.5: 出力履歴購読
+      onSnapshot(query(collection(db, 'monthlyExports'), orderBy('yearMonth', 'desc')), snap => {
+        this.monthlyExports = snap.docs.map(d => {
+          const data = d.data();
+          let dt = null;
+          if (data.exportedAt && typeof data.exportedAt.toDate === 'function') {
+            dt = data.exportedAt.toDate();
+          } else if (data.exportedAt) {
+            dt = new Date(data.exportedAt);
+          }
+          return {
+            id: d.id,
+            yearMonth: data.yearMonth,
+            exportedAt: dt,
+            exportedAtStr: dt ? dt.toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' }) : ''
+          };
+        });
+      }, err => { console.error(err); });
     },
 
     // ===== 共通ユーティリティ =====
@@ -1502,10 +1739,9 @@ function app() {
       return v.date && v.customerName && v.menu && v.staff && v.paymentMethod;
     },
 
-    // 顧客名オートコンプリート
     onCustomerInput() {
       this.showSuggest = true;
-      this.visitForm.customerId = null;  // 入力中はリセット
+      this.visitForm.customerId = null;
     },
     get filteredCustomers() {
       const q = (this.visitForm.customerName || '').trim();
@@ -1520,7 +1756,6 @@ function app() {
       this.showSuggest = false;
     },
 
-    // 自動カテゴリ判定(GAS統計v4のロジックを踏襲)
     autoCategory() {
       const m = this.visitForm.menu || '';
       const p = this.visitForm.paymentMethod || '';
@@ -1541,7 +1776,6 @@ function app() {
       }
     },
 
-    // 月別フィルタ
     get filteredVisits() {
       if (!this.visitFilterMonth) return this.visits;
       return this.visits.filter(v => (v.date || '').startsWith(this.visitFilterMonth));
@@ -1550,7 +1784,6 @@ function app() {
       return this.filteredVisits.reduce((s, v) => s + (v.amount || 0), 0);
     },
 
-    // 保存
     async saveVisit() {
       if (!this.canSaveVisit()) return;
       const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
@@ -1561,7 +1794,6 @@ function app() {
         const v = this.visitForm;
         const cat = this.autoCategory();
 
-        // 1. 顧客マスター(自動登録 or リンク)
         let customerId = v.customerId;
         if (!customerId) {
           const existing = this.customersTemp.find(c => c.name === v.customerName.trim());
@@ -1579,7 +1811,6 @@ function app() {
           }
         }
 
-        // 2. 来院記録保存
         const ref = v.id
           ? doc(db, 'visits', v.id)
           : doc(collection(db, 'visits'));
@@ -1689,10 +1920,7 @@ function app() {
       alert('登録しました');
     },
 
-    // ============================================
     // ===== v0.3 物販機能 =====
-    // ============================================
-
     get activeProducts() {
       return this.products.filter(p => p.active !== false);
     },
@@ -1802,7 +2030,6 @@ function app() {
       try {
         const s = this.salesForm;
 
-        // 1. 顧客マスター(任意・名前があるとき)
         let customerId = s.customerId;
         if (s.customerName && s.customerName.trim() && !customerId) {
           const trimmedName = s.customerName.trim();
@@ -1821,7 +2048,6 @@ function app() {
           }
         }
 
-        // 2. 物販記録保存
         const ref = s.id
           ? doc(db, 'sales', s.id)
           : doc(collection(db, 'sales'));
@@ -1984,12 +2210,7 @@ function app() {
       }
     },
 
-    // ===== /v0.3 物販機能 =====
-
-    // ============================================
     // ===== v0.4 経費機能 =====
-    // ============================================
-
     emptyExpense() {
       return {
         id: null,
@@ -2098,7 +2319,6 @@ function app() {
       }
     },
 
-    // サンプル原価の自動転記
     async autoTransferSampleCost() {
       const month = this.expenseFilterMonth || this.currentMonthStr();
       if (!month) {
@@ -2106,7 +2326,6 @@ function app() {
         return;
       }
 
-      // 該当月のサンプル提供を sales から集計
       const monthSales = this.sales.filter(s =>
         s.isSample && (s.date || '').startsWith(month)
       );
@@ -2116,7 +2335,6 @@ function app() {
         return;
       }
 
-      // 商品ごとに数量集計 → 原価×数量で合計
       const breakdown = {};
       let totalCost = 0;
       for (const s of monthSales) {
@@ -2141,7 +2359,6 @@ function app() {
         .join(' / ');
       const noteText = `[自動]サンプル原価 ${noteParts}`;
 
-      // 既存の同月自動レコードを検索
       const existing = this.expenses.find(e => e.isAutoSample && e.sampleMonth === month);
 
       const msg = existing
@@ -2154,12 +2371,10 @@ function app() {
       this.saving = true;
 
       try {
-        // 既存があれば削除
         if (existing) {
           await deleteDoc(doc(db, 'expenses', existing.id));
         }
 
-        // 月末日付に転記
         const lastDay = this.lastDayOfMonth(month);
 
         const ref = doc(collection(db, 'expenses'));
@@ -2167,7 +2382,7 @@ function app() {
           date: lastDay,
           category: '販促費',
           amount: totalCost,
-          paymentMethod: 'その他',  // 現金出納帳に乗らない
+          paymentMethod: 'その他',
           note: noteText,
           isAutoSample: true,
           sampleMonth: month,
@@ -2187,18 +2402,12 @@ function app() {
     },
 
     lastDayOfMonth(yyyymm) {
-      // "2026-05" → "2026-05-31"
       const [y, m] = yyyymm.split('-').map(Number);
-      const last = new Date(y, m, 0).getDate();  // 翌月0日 = 当月末日
+      const last = new Date(y, m, 0).getDate();
       return `${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
     },
 
-    // ===== /v0.4 経費機能 =====
-
-    // ============================================
     // ===== v0.4 第2弾 広告費機能 =====
-    // ============================================
-
     emptyAd() {
       return {
         id: null,
@@ -2247,7 +2456,6 @@ function app() {
         map[key].totalAmount += Number(a.amount) || 0;
       }
       const arr = Object.values(map);
-      // 構成比計算
       for (const row of arr) {
         row.percent = total > 0 ? Math.round((row.totalAmount / total) * 1000) / 10 : 0;
       }
@@ -2306,19 +2514,11 @@ function app() {
       }
     },
 
-    // ===== /v0.4 第2弾 広告費機能 =====
-
-    // ============================================
     // ===== v0.4 第3弾 現金出納帳機能 =====
-    // ============================================
-
-    // 月選択が変わったら繰越を読み込み
     async onCashbookMonthChange() {
       await this.loadCashbookCarry(this.cashbookMonth);
     },
 
-    // 月初繰越の読み込み(自動コピー対応)
-    // ★案A: 手動入力(isManual:true)のみ保護、それ以外は毎回前月末から再計算
     async loadCashbookCarry(month) {
       if (!month) return;
       const { db, doc, getDoc, setDoc, serverTimestamp } = window._fb;
@@ -2326,23 +2526,19 @@ function app() {
         const ref = doc(db, 'cashbook_carry', month);
         const snap = await getDoc(ref);
 
-        // 1. 手動入力のレコードがあれば、それを尊重して終了
         if (snap.exists() && snap.data().isManual === true) {
           this.cashbookCarry = Number(snap.data().carryAmount) || 0;
           this.cashbookCarryIsManual = true;
           return;
         }
 
-        // 2. 自動コピー or 未作成 → 前月から最新の値で再計算
         const prev = this.prevMonth(month);
         const prevSnap = await getDoc(doc(db, 'cashbook_carry', prev));
         if (prevSnap.exists()) {
-          // 前月の月末残高 = 前月繰越 + 前月の現金収入 - 前月の現金支出
           const prevSummary = this.calcMonthCashSummary(prev);
           const carry = (Number(prevSnap.data().carryAmount) || 0)
                       + prevSummary.income - prevSummary.expense;
 
-          // 既存値と異なる時だけ書き込み(無駄な書き込み回避)
           const oldCarry = snap.exists() ? (Number(snap.data().carryAmount) || 0) : null;
           if (oldCarry !== carry) {
             await setDoc(ref, {
@@ -2356,7 +2552,6 @@ function app() {
           this.cashbookCarry = carry;
           this.cashbookCarryIsManual = false;
         } else {
-          // 前月もなし → 初月扱い、繰越0
           this.cashbookCarry = 0;
           this.cashbookCarryIsManual = false;
         }
@@ -2367,7 +2562,6 @@ function app() {
       }
     },
 
-    // 月初繰越の手動編集を保存
     async saveCashbookCarryManual() {
       if (!this.cashbookMonth) return;
       const { db, doc, setDoc, serverTimestamp } = window._fb;
@@ -2405,43 +2599,42 @@ function app() {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     },
 
-    // 現金収入・支出のサマリ計算(任意月用)
     calcMonthCashSummary(month) {
       let income = 0, expense = 0;
-      // 来院(現金)
       for (const v of this.visits) {
         if ((v.date || '').startsWith(month) && v.paymentMethod === '現金') {
           income += Number(v.amount) || 0;
         }
       }
-      // 物販(現金)
       for (const s of this.sales) {
         if ((s.date || '').startsWith(month) && s.paymentMethod === '現金' && !s.isSample) {
           income += Number(s.amount) || 0;
         }
       }
-      // 経費(現金) ※その他は除外
       for (const e of this.expenses) {
         if ((e.date || '').startsWith(month) && e.paymentMethod === '現金') {
           expense += Number(e.amount) || 0;
         }
       }
-      // 広告費(現金)
       for (const a of this.ads) {
         if ((a.date || '').startsWith(month) && a.paymentMethod === '現金') {
           expense += Number(a.amount) || 0;
         }
       }
+      // 🆕 v0.5: 銀行預け入れも貸方として加算
+      for (const d of this.cashDeposits) {
+        if ((d.date || '').startsWith(month)) {
+          expense += Number(d.amount) || 0;
+        }
+      }
       return { income, expense };
     },
 
-    // 明細用エントリ生成
     get cashbookEntries() {
       const m = this.cashbookMonth;
       if (!m) return [];
       const list = [];
 
-      // 来院(現金)
       for (const v of this.visits) {
         if ((v.date || '').startsWith(m) && v.paymentMethod === '現金') {
           list.push({
@@ -2453,7 +2646,6 @@ function app() {
           });
         }
       }
-      // 物販(現金・サンプル除く)
       for (const s of this.sales) {
         if ((s.date || '').startsWith(m) && s.paymentMethod === '現金' && !s.isSample) {
           list.push({
@@ -2465,7 +2657,6 @@ function app() {
           });
         }
       }
-      // 経費(現金)
       for (const e of this.expenses) {
         if ((e.date || '').startsWith(m) && e.paymentMethod === '現金') {
           list.push({
@@ -2477,7 +2668,6 @@ function app() {
           });
         }
       }
-      // 広告費(現金)
       for (const a of this.ads) {
         if ((a.date || '').startsWith(m) && a.paymentMethod === '現金') {
           list.push({
@@ -2489,8 +2679,19 @@ function app() {
           });
         }
       }
+      // 🆕 v0.5: 銀行預け入れ
+      for (const d of this.cashDeposits) {
+        if ((d.date || '').startsWith(m)) {
+          list.push({
+            date: d.date,
+            type: '預入',
+            desc: `現金入金${d.bankName ? '(' + d.bankName + ')' : ''}${d.note ? ' / ' + d.note : ''}`,
+            income: 0,
+            expense: Number(d.amount) || 0
+          });
+        }
+      }
 
-      // 日付昇順 → 残高累計
       list.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
       let bal = Number(this.cashbookCarry) || 0;
       for (const item of list) {
@@ -2500,7 +2701,6 @@ function app() {
       return list;
     },
 
-    // 現金収入のサマリ(現在月)
     get cashbookSummary() {
       const m = this.cashbookMonth;
       const sum = this.calcMonthCashSummary(m);
@@ -2511,7 +2711,6 @@ function app() {
       };
     },
 
-    // カテゴリ別集計
     get cashbookByCategory() {
       const m = this.cashbookMonth;
       const incomeMap = { '来院売上(現金)': 0, '物販売上(現金)': 0 };
@@ -2539,6 +2738,13 @@ function app() {
           expenseMap[k] = (expenseMap[k] || 0) + (Number(a.amount) || 0);
         }
       }
+      // 🆕 v0.5: 銀行預け入れ
+      for (const d of this.cashDeposits) {
+        if ((d.date || '').startsWith(m)) {
+          const k = `現金入金${d.bankName ? '(' + d.bankName + ')' : ''}`;
+          expenseMap[k] = (expenseMap[k] || 0) + (Number(d.amount) || 0);
+        }
+      }
 
       const incomeRows = Object.entries(incomeMap)
         .filter(([_, v]) => v > 0)
@@ -2548,9 +2754,495 @@ function app() {
         .sort((a, b) => b.amount - a.amount);
 
       return { incomeRows, expenseRows };
+    },
+
+    // ============================================
+    // ===== 🆕 v0.5: 銀行預け入れ機能 =====
+    // ============================================
+
+    emptyDeposit() {
+      return {
+        id: null,
+        date: this.todayStr(),
+        amount: 0,
+        bankName: '',
+        note: ''
+      };
+    },
+
+    resetDepositForm() {
+      this.depositForm = this.emptyDeposit();
+      this.depositMessage = '';
+    },
+
+    canSaveDeposit() {
+      const d = this.depositForm;
+      return d.date && d.amount > 0;
+    },
+
+    get depositsForCurrentMonth() {
+      if (!this.cashbookMonth) return [];
+      return this.cashDeposits
+        .filter(d => (d.date || '').startsWith(this.cashbookMonth))
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    },
+
+    depositTotalAmount() {
+      return this.depositsForCurrentMonth.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    },
+
+    async saveDeposit() {
+      if (!this.canSaveDeposit()) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.depositMessage = '';
+
+      try {
+        const d = this.depositForm;
+        const ref = d.id
+          ? doc(db, 'cash_deposits', d.id)
+          : doc(collection(db, 'cash_deposits'));
+
+        const data = {
+          date: d.date,
+          amount: Number(d.amount) || 0,
+          bankName: d.bankName || '',
+          note: d.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (!d.id) data.createdAt = serverTimestamp();
+
+        await setDoc(ref, data, { merge: true });
+
+        this.depositMessage = d.id ? '更新しました' : '保存しました';
+        this.depositMessageType = 'ok';
+        this.resetDepositForm();
+        setTimeout(() => this.depositMessage = '', 2500);
+      } catch (err) {
+        console.error(err);
+        this.depositMessage = 'エラー: ' + err.message;
+        this.depositMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    editDeposit(d) {
+      this.depositForm = { ...d };
+      // スクロールせずインラインで編集
+    },
+
+    async deleteDeposit(d) {
+      if (!confirm(`${d.date} ¥${(d.amount||0).toLocaleString()} の預け入れ記録を削除しますか?`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'cash_deposits', d.id));
+      } catch (err) {
+        alert('削除エラー: ' + err.message);
+      }
+    },
+
+    // ============================================
+    // ===== 🆕 v0.5: 月末Excel出力機能 =====
+    // ============================================
+
+    get exportHistory() {
+      return this.monthlyExports;
+    },
+
+    get pendingExports() {
+      const today = new Date();
+      const exportedSet = new Set(this.monthlyExports.map(h => h.yearMonth));
+      const pending = [];
+      // 過去6ヶ月をチェック(当月は除外)
+      for (let i = 1; i <= 6; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        if (!exportedSet.has(ym)) pending.push(ym);
+      }
+      return pending.slice(0, 3);
+    },
+
+    isMonthExported(ym) {
+      return this.monthlyExports.some(h => h.yearMonth === ym);
+    },
+
+    formatExportDate(ym) {
+      const h = this.monthlyExports.find(x => x.yearMonth === ym);
+      return h ? h.exportedAtStr : '';
+    },
+
+    async generateMonthEndZip() {
+      if (this.isGeneratingExcel) return;
+      if (typeof XLSX === 'undefined') {
+        alert('SheetJS が読み込まれていません。ページを再読み込みしてください。');
+        return;
+      }
+      if (typeof JSZip === 'undefined') {
+        alert('JSZip が読み込まれていません。ページを再読み込みしてください。');
+        return;
+      }
+
+      this.isGeneratingExcel = true;
+      this.excelGenerationLog = [];
+      const ym = this.exportMonth;
+      const log = (msg) => {
+        this.excelGenerationLog.push(msg);
+        console.log(msg);
+      };
+
+      try {
+        log(`📂 ${ym} のデータを集計中...`);
+        const data = this.collectMonthEndData(ym);
+        log(`  ✓ 来院記録: ${data.visits.length}件`);
+        log(`  ✓ 物販記録: ${data.sales.length}件`);
+        log(`  ✓ 経費: ${data.expenses.length}件`);
+        log(`  ✓ 広告費: ${data.ads.length}件`);
+        log(`  ✓ 銀行預入: ${data.cashDeposits.length}件`);
+
+        log('📊 現金出納帳を生成中...');
+        const cashbookWb = this.buildCashbookWorkbook(ym, data);
+        const cashbookBuf = XLSX.write(cashbookWb, { bookType: 'xlsx', type: 'array' });
+
+        log('📦 物販管理表を生成中...');
+        const salesWb = this.buildSalesWorkbook(ym, data);
+        const salesBuf = XLSX.write(salesWb, { bookType: 'xlsx', type: 'array' });
+
+        log('📣 広告費内訳を生成中...');
+        const adsWb = this.buildAdsWorkbook(ym, data);
+        const adsBuf = XLSX.write(adsWb, { bookType: 'xlsx', type: 'array' });
+
+        log('🗜 ZIPに圧縮中...');
+        const zip = new JSZip();
+        zip.file(`${ym}_現金出納帳.xlsx`, cashbookBuf);
+        zip.file(`${ym}_物販管理表.xlsx`, salesBuf);
+        zip.file(`${ym}_広告費内訳.xlsx`, adsBuf);
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+        // ダウンロード
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${ym}_月末資料.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log('💾 出力履歴を記録中...');
+        await this.recordExportHistory(ym);
+        log(`✅ 完了! ${ym}_月末資料.zip をダウンロードしました`);
+      } catch (err) {
+        log(`❌ エラー: ${err.message}`);
+        console.error(err);
+      } finally {
+        this.isGeneratingExcel = false;
+      }
+    },
+
+    collectMonthEndData(ym) {
+      const visits = this.visits.filter(v => (v.date || '').startsWith(ym));
+      const sales = this.sales.filter(s => (s.date || '').startsWith(ym));
+      const expenses = this.expenses.filter(e => (e.date || '').startsWith(ym));
+      const ads = this.ads.filter(a => (a.date || '').startsWith(ym));
+      const cashDeposits = this.cashDeposits.filter(d => (d.date || '').startsWith(ym));
+
+      // 月初繰越を計算(画面の cashbookCarry とは別ロジック - 対象月の値を使用)
+      // ここでは現状の cashbookMonth が ym と異なる可能性があるので、再計算する必要あり
+      // 簡易実装: 月初繰越は対象月のFirestoreから取得済みの値を使う
+      // → 異なる月を出力する場合に正しい繰越が必要なので、計算ロジック実装
+
+      let openingBalance = 0;
+      // 同じ月なら現在の値、異なる月なら自前で計算
+      if (ym === this.cashbookMonth) {
+        openingBalance = Number(this.cashbookCarry) || 0;
+      } else {
+        // 過去全月の収支を累積計算(簡易)
+        const allMonths = this.collectAllMonthsBefore(ym);
+        let bal = 0;
+        for (const prevYm of allMonths) {
+          const sum = this.calcMonthCashSummary(prevYm);
+          bal += sum.income - sum.expense;
+        }
+        openingBalance = bal;
+      }
+
+      // 前月以前の物販履歴(在庫繰越用)
+      const prevSales = this.sales.filter(s => {
+        const d = s.date || '';
+        return d && d < `${ym}-01`;
+      });
+
+      const [y, m] = ym.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+
+      return {
+        visits, sales, expenses, ads, cashDeposits,
+        products: this.products,
+        prevSales,
+        openingBalance,
+        yearMonth: ym,
+        lastDay
+      };
+    },
+
+    collectAllMonthsBefore(ym) {
+      // 全データから対象月より前のユニーク月を抽出
+      const set = new Set();
+      const addIfBefore = (date) => {
+        if (!date) return;
+        const m = date.substring(0, 7);
+        if (m < ym) set.add(m);
+      };
+      this.visits.forEach(v => addIfBefore(v.date));
+      this.sales.forEach(s => addIfBefore(s.date));
+      this.expenses.forEach(e => addIfBefore(e.date));
+      this.ads.forEach(a => addIfBefore(a.date));
+      this.cashDeposits.forEach(d => addIfBefore(d.date));
+      return Array.from(set).sort();
+    },
+
+    buildCashbookWorkbook(ym, data) {
+      const [y, m] = ym.split('-').map(Number);
+      const rows = [];
+      rows.push([`${y}年${m}月 現金出納帳`, '', '', '', '', '', '', '']);
+      rows.push(['伝票No', '年', '月', '日', '摘要', '借方金額', '貸方金額', '差引残高']);
+
+      let balance = data.openingBalance;
+      rows.push(['', y, m, 1, '繰越', '', '', balance]);
+
+      const txns = [];
+
+      // 来院(現金) - 日次集計、TAK/日向別
+      const visitsByDate = {};
+      data.visits.filter(v => v.paymentMethod === '現金').forEach(v => {
+        const key = v.staff === '日向' ? `${v.date}|HINATA` : `${v.date}|TAK`;
+        if (!visitsByDate[key]) visitsByDate[key] = 0;
+        visitsByDate[key] += (v.amount || 0);
+      });
+      Object.entries(visitsByDate).forEach(([key, amount]) => {
+        if (amount > 0) {
+          const [date, staff] = key.split('|');
+          const desc = staff === 'HINATA' ? 'インディバ施術(日向)' : '整体院現金売上(TAK)';
+          txns.push({ date, type: 'income', desc, amount });
+        }
+      });
+
+      // 物販(現金、サンプル除外) - 日次集計
+      const salesByDate = {};
+      data.sales.filter(s => s.paymentMethod === '現金' && !s.isSample).forEach(s => {
+        if (!salesByDate[s.date]) salesByDate[s.date] = 0;
+        salesByDate[s.date] += (s.amount || 0);
+      });
+      Object.entries(salesByDate).forEach(([date, amount]) => {
+        if (amount > 0) {
+          txns.push({ date, type: 'income', desc: '物販 現金売上 8%', amount });
+        }
+      });
+
+      // 経費(現金、その他除外、自動転記サンプル除外) - 伝票No付き
+      let receiptCounter = 0;
+      const circledNumbers = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩',
+                              '⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
+      data.expenses
+        .filter(e => e.paymentMethod === '現金' && !e.isAutoSample)
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+        .forEach(e => {
+          const receiptNo = circledNumbers[receiptCounter] || `(${receiptCounter + 1})`;
+          receiptCounter++;
+          const desc = e.note ? `${e.category}(${e.note})` : e.category;
+          txns.push({ date: e.date, type: 'expense', desc, amount: e.amount, receiptNo });
+        });
+
+      // 広告費(現金) - 通常はカードなのでほぼ空
+      data.ads.filter(a => a.paymentMethod === '現金').forEach(a => {
+        const desc = a.note ? `広告費(${a.category}/${a.note})` : `広告費(${a.category})`;
+        txns.push({ date: a.date, type: 'expense', desc, amount: a.amount });
+      });
+
+      // 🆕 銀行預け入れ
+      (data.cashDeposits || []).forEach(d => {
+        const desc = d.bankName ? `現金入金(${d.bankName})` : '現金入金';
+        txns.push({ date: d.date, type: 'expense', desc, amount: d.amount });
+      });
+
+      txns.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+      txns.forEach(t => {
+        const day = parseInt((t.date || '').split('-')[2], 10);
+        if (t.type === 'income') {
+          balance += t.amount;
+          rows.push([t.receiptNo || '', '', '', day, t.desc, t.amount, '', balance]);
+        } else {
+          balance -= t.amount;
+          rows.push([t.receiptNo || '', '', '', day, t.desc, '', t.amount, balance]);
+        }
+      });
+
+      rows.push(['', '', '', data.lastDay, '月末残高', '', '', balance]);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 6 }, { wch: 5 }, { wch: 5 },
+        { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 12 }
+      ];
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+
+      // 数値書式
+      for (let r = 2; r < rows.length; r++) {
+        ['F', 'G', 'H'].forEach(col => {
+          const cellRef = `${col}${r + 1}`;
+          if (ws[cellRef] && typeof ws[cellRef].v === 'number') {
+            ws[cellRef].z = '#,##0';
+          }
+        });
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `${y}年${m}月`);
+      return wb;
+    },
+
+    buildSalesWorkbook(ym, data) {
+      const [y, m] = ym.split('-').map(Number);
+      const wb = XLSX.utils.book_new();
+      const rows = [];
+      rows.push([`${y}年${m}月 物販管理表`]);
+      rows.push([]);
+
+      const calcOpeningStock = (productId) => {
+        const product = data.products.find(p => p.id === productId);
+        if (!product) return 0;
+        const initial = Number(product.initialStock) || 0;
+        const consumed = data.prevSales
+          .filter(s => s.productId === productId)
+          .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+        return initial - consumed;
+      };
+
+      const activeProducts = data.products.filter(p => p.active !== false);
+
+      activeProducts.forEach((product) => {
+        rows.push([`■ ${product.name}`, '', '', `単価: ¥${(product.sellingPrice || 0).toLocaleString()}`]);
+        rows.push(['日付', '月初在庫', '仕入', '販売(現金)', '販売(その他)', 'サンプル', '月末在庫', '担当者', '購入者']);
+
+        const productSales = data.sales.filter(s => s.productId === product.id || s.productName === product.name);
+
+        let currentStock = calcOpeningStock(product.id);
+        let totalCash = 0, totalOther = 0, totalSample = 0;
+
+        rows.push([`${m}/1`, currentStock, '', '', '', '', currentStock, '', '']);
+
+        for (let day = 1; day <= data.lastDay; day++) {
+          const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
+          const dailySales = productSales.filter(s => s.date === dateStr);
+          if (dailySales.length === 0) continue;
+
+          const cashQty = dailySales.filter(s => s.paymentMethod === '現金' && !s.isSample)
+                                     .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+          const otherQty = dailySales.filter(s => s.paymentMethod !== '現金' && !s.isSample)
+                                      .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+          const sampleQty = dailySales.filter(s => s.isSample)
+                                       .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+          const customers = [...new Set(dailySales.map(s => s.customerName).filter(Boolean))].join('/');
+          const staff = [...new Set(dailySales.map(s => s.staff).filter(Boolean))].join('/');
+
+          const openingDay = currentStock;
+          currentStock = currentStock - cashQty - otherQty - sampleQty;
+
+          rows.push([
+            `${m}/${day}`, openingDay, '',
+            cashQty || '', otherQty || '', sampleQty || '',
+            currentStock, staff, customers
+          ]);
+          totalCash += cashQty;
+          totalOther += otherQty;
+          totalSample += sampleQty;
+        }
+
+        rows.push(['合計', '', '', totalCash, totalOther, totalSample, currentStock, '', '']);
+        rows.push([]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 10 },
+        { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 20 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, `${y}年${m}月`);
+      return wb;
+    },
+
+    buildAdsWorkbook(ym, data) {
+      const [y, m] = ym.split('-').map(Number);
+      const rows = [];
+      rows.push([`${y}年${m}月 広告費内訳(TAK)`]);
+      rows.push([]);
+      rows.push(['日付', '媒体', '内容', '金額', '支払方法', '備考']);
+
+      const sortedAds = [...data.ads].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      sortedAds.forEach(ad => {
+        const day = parseInt((ad.date || '').split('-')[2], 10);
+        rows.push([
+          `${m}/${day}`,
+          ad.category || '',
+          ad.note || '',
+          Number(ad.amount) || 0,
+          ad.paymentMethod || '',
+          ''
+        ]);
+      });
+      rows.push([]);
+      rows.push(['【媒体別集計】']);
+      rows.push(['媒体', '金額', '構成比']);
+      const total = sortedAds.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+      const byCategory = {};
+      sortedAds.forEach(a => {
+        const k = a.category || '(未分類)';
+        if (!byCategory[k]) byCategory[k] = 0;
+        byCategory[k] += Number(a.amount) || 0;
+      });
+      Object.entries(byCategory)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([cat, amt]) => {
+          const pct = total > 0 ? (amt / total * 100).toFixed(1) + '%' : '0%';
+          rows.push([cat, amt, pct]);
+        });
+      rows.push(['合計', total, '100%']);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 18 }, { wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
+      ];
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+
+      for (let r = 0; r < rows.length; r++) {
+        ['B', 'D'].forEach(col => {
+          const cellRef = `${col}${r + 1}`;
+          if (ws[cellRef] && typeof ws[cellRef].v === 'number') {
+            ws[cellRef].z = '#,##0';
+          }
+        });
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `${y}年${m}月`);
+      return wb;
+    },
+
+    async recordExportHistory(ym) {
+      const { db, doc, setDoc, serverTimestamp } = window._fb;
+      await setDoc(doc(db, 'monthlyExports', ym), {
+        yearMonth: ym,
+        exportedAt: serverTimestamp(),
+        fileNames: [
+          `${ym}_現金出納帳.xlsx`,
+          `${ym}_物販管理表.xlsx`,
+          `${ym}_広告費内訳.xlsx`
+        ]
+      }, { merge: true });
     }
 
-    // ===== /v0.4 第3弾 現金出納帳機能 =====
   };
 }
 </script>
