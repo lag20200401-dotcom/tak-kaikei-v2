@@ -461,7 +461,7 @@ function app() {
     visits: [],
 
     // ===== 来院フォーム =====
-    visitForm: this.emptyVisit(),
+    visitForm: { id: null, date: '', customerName: '', customerId: null, menu: '', amount: 0, staff: 'TAK', paymentMethod: '現金', note: '' },
     visitMessage: '',
     visitMessageType: 'ok',
     visitFilterMonth: '',
@@ -469,10 +469,12 @@ function app() {
 
     // ===== 商品フォーム =====
     productModalOpen: false,
-    productForm: this.emptyProduct(),
+    productForm: { id: null, name: '', agencyPrice: 0, salesPrice: 0, taxRate: 0.10, openingStock: 0, active: true },
 
     // ===== 初期化 =====
     init() {
+      this.visitForm = this.emptyVisit();
+      this.productForm = this.emptyProduct();
       this.visitFilterMonth = this.currentMonthStr();
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
@@ -491,7 +493,7 @@ function app() {
         this.lockError = 'パスコードが違います';
       }
     },
-    lock() { this.unlocked = true; this.unlocked = false; },
+    lock() { this.unlocked = false; },
 
     // ===== Firestore 購読 =====
     subscribeAll() {
@@ -530,7 +532,7 @@ function app() {
     emptyVisit() {
       return {
         id: null,
-        date: this.todayStr ? this.todayStr() : new Date().toISOString().slice(0,10),
+        date: this.todayStr(),
         customerName: '',
         customerId: null,
         menu: '',
