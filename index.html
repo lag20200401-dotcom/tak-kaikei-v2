@@ -357,7 +357,7 @@
                   class="px-3 py-1 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white text-xs rounded">
             読み込み
           </button>
-          <span class="text-xs text-slate-500" x-show="customerCsvFile" x-text="customerCsvFile.name"></span>
+          <span class="text-xs text-slate-500" x-show="customerCsvFile" x-text="customerCsvFile && customerCsvFile.name"></span>
         </div>
 
         <!-- エラー表示 -->
