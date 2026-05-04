@@ -483,6 +483,64 @@
           </div>
         </div>
 
+        <!-- 🆕 v0.6.2: テストデータ削除ツール(三重安全装置) -->
+        <div class="mt-6 pt-4 border-t-2 border-red-200">
+          <details class="bg-red-50 rounded-lg">
+            <summary class="cursor-pointer p-3 text-red-800 font-medium text-sm">
+              🗑️ テストデータ一括削除(危険ツール - 開発時のみ)
+            </summary>
+            <div class="p-4 space-y-3">
+              <div class="bg-white rounded p-3 text-xs text-slate-700 space-y-2">
+                <div class="font-bold text-red-700">⚠️ 削除条件(3つ全て満たすデータのみ削除):</div>
+                <ol class="list-decimal list-inside space-y-1 ml-2">
+                  <li><code class="bg-slate-100 px-1">importedFrom === 'kakoikomi'</code></li>
+                  <li>顧客No が <code class="bg-slate-100 px-1">1001〜1010</code>(4桁)のいずれか</li>
+                  <li>顧客名が架空テスト名(青山太郎/飯田花子/上野次郎/榎本美咲/小田俊夫/加藤健太/木村花子/佐々木太一/鈴木愛子)のいずれか</li>
+                </ol>
+                <div class="text-red-600 font-medium">
+                  → 本番データは顧客No 7桁(0001001等)なので絶対に該当しません
+                </div>
+              </div>
+              <button @click="findTestData()"
+                      :disabled="testDataDeleting"
+                      class="px-3 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white text-xs rounded">
+                ① テストデータを検索
+              </button>
+              <div x-show="testDataFound !== null">
+                <div class="bg-amber-50 border border-amber-300 rounded p-3 text-xs">
+                  <div class="font-bold mb-2">検索結果: <span x-text="testDataFound.length"></span> 件</div>
+                  <ul class="space-y-1 max-h-40 overflow-y-auto">
+                    <template x-for="d in testDataFound" :key="d.id">
+                      <li class="font-mono">
+                        ・ <span x-text="d.customerNo"></span> <span x-text="d.name"></span>
+                        <span class="text-slate-500" x-text="'(' + d.id + ')'"></span>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+                <div x-show="testDataFound.length > 0" class="mt-3 space-y-2">
+                  <label class="block text-xs">
+                    最終確認: <span class="font-bold text-red-600">DELETE</span> と入力してください:
+                    <input type="text" x-model="testDeleteConfirm"
+                           class="block w-32 mt-1 border border-slate-300 rounded px-2 py-1 text-xs"
+                           placeholder="DELETE">
+                  </label>
+                  <button @click="deleteTestData()"
+                          :disabled="testDeleteConfirm !== 'DELETE' || testDataDeleting"
+                          class="px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white text-xs rounded">
+                    <span x-show="!testDataDeleting">② <span x-text="testDataFound.length"></span>件を削除実行</span>
+                    <span x-show="testDataDeleting">削除中...</span>
+                  </button>
+                </div>
+                <div x-show="testDataFound.length === 0" class="mt-2 text-xs text-green-700">
+                  ✓ テストデータは見つかりませんでした(既に削除済みか、まだ投入されていません)
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+        <!-- /v0.6.2 テストデータ削除 -->
+
       </div>
     </details>
   </section>
@@ -1744,6 +1802,11 @@ function app() {
     customerCsvImporting: false,
     customerCsvShowWarningsOnly: false,
 
+    // ===== 🆕 v0.6.2: テストデータ削除ツール =====
+    testDataFound: null,
+    testDataDeleting: false,
+    testDeleteConfirm: '',
+
     // ===== 経費フォーム(v0.4) =====
     expenseForm: {
       id: null, date: '', category: '仕入', amount: 0,
@@ -2498,6 +2561,89 @@ function app() {
     },
 
     // ===== /v0.6 顧客CSV取込 =====
+
+    // ===== 🆕 v0.6.2: テストデータ削除ツール =====
+    // 三重安全装置: importedFrom + customerNo + name の AND条件で本番を絶対に消さない
+    async findTestData() {
+      // 検索基準
+      const TEST_NOS = ['1001','1002','1003','1004','1005','1006','1007','1008','1009','1010'];
+      const TEST_NAMES = ['青山太郎','飯田花子','上野次郎','榎本美咲','小田俊夫','加藤健太','木村花子','佐々木太一','鈴木愛子'];
+      
+      // customers_temp 全件から条件マッチを抽出
+      const matched = this.customers.filter(c => {
+        // 条件①: importedFrom が 'kakoikomi' であること
+        if (c.importedFrom !== 'kakoikomi') return false;
+        // 条件②: customerNo が 1001〜1010(4桁文字列)であること
+        if (!TEST_NOS.includes(c.customerNo)) return false;
+        // 条件③: name がテスト架空名のいずれかであること
+        if (!TEST_NAMES.includes(c.name)) return false;
+        return true;
+      });
+      
+      this.testDataFound = matched;
+      this.testDeleteConfirm = '';
+      console.log('🔍 テストデータ検索結果:', matched.length, '件', matched);
+    },
+    
+    async deleteTestData() {
+      // 入力検証
+      if (this.testDeleteConfirm !== 'DELETE') {
+        alert('「DELETE」と正確に入力してください');
+        return;
+      }
+      if (!this.testDataFound || this.testDataFound.length === 0) {
+        alert('削除対象がありません');
+        return;
+      }
+      
+      // 最終確認(三段階目)
+      const targets = this.testDataFound.map(d => `${d.customerNo} ${d.name}`).join('\n');
+      if (!confirm(`以下の ${this.testDataFound.length} 件を本当に削除しますか?\n\n${targets}\n\nこの操作は取り消せません。`)) {
+        return;
+      }
+      
+      this.testDataDeleting = true;
+      const { db, doc, deleteDoc } = window._fb;
+      let success = 0, errors = 0;
+      
+      try {
+        for (const c of this.testDataFound) {
+          try {
+            // 削除前の二重チェック(再度3条件確認)
+            if (c.importedFrom !== 'kakoikomi') {
+              console.warn('⚠️ スキップ(importedFrom不一致):', c.id);
+              errors++;
+              continue;
+            }
+            if (!['1001','1002','1003','1004','1005','1006','1007','1008','1009','1010'].includes(c.customerNo)) {
+              console.warn('⚠️ スキップ(customerNo不一致):', c.id);
+              errors++;
+              continue;
+            }
+            if (!['青山太郎','飯田花子','上野次郎','榎本美咲','小田俊夫','加藤健太','木村花子','佐々木太一','鈴木愛子'].includes(c.name)) {
+              console.warn('⚠️ スキップ(name不一致):', c.id);
+              errors++;
+              continue;
+            }
+            // 削除実行
+            await deleteDoc(doc(db, 'customers_temp', c.id));
+            success++;
+            console.log('✓ 削除:', c.customerNo, c.name);
+          } catch (e) {
+            console.error('削除エラー:', c.id, e);
+            errors++;
+          }
+        }
+        
+        alert(`削除完了\n成功: ${success} 件\nエラー: ${errors} 件`);
+        // 状態リセット
+        this.testDataFound = null;
+        this.testDeleteConfirm = '';
+      } finally {
+        this.testDataDeleting = false;
+      }
+    },
+    // ===== /v0.6.2 テストデータ削除 =====
 
     // ===== v0.3 物販機能 =====
     get activeProducts() {
