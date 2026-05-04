@@ -2570,7 +2570,7 @@ function app() {
       const TEST_NAMES = ['青山太郎','飯田花子','上野次郎','榎本美咲','小田俊夫','加藤健太','木村花子','佐々木太一','鈴木愛子'];
       
       // customers_temp 全件から条件マッチを抽出
-      const matched = this.customers.filter(c => {
+      const matched = this.customersTemp.filter(c => {
         // 条件①: importedFrom が 'kakoikomi' であること
         if (c.importedFrom !== 'kakoikomi') return false;
         // 条件②: customerNo が 1001〜1010(4桁文字列)であること
