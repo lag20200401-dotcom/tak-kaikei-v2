@@ -324,6 +324,167 @@
         一括登録実行
       </button>
     </details>
+
+    <!-- 🆕 v0.6: 顧客CSV取込(一時ツール) -->
+    <details class="bg-white rounded-xl shadow p-4 text-sm">
+      <summary class="cursor-pointer text-slate-700 font-medium">📥 顧客CSV取込(囲い込み職人) — 一時ツール</summary>
+      <div class="mt-4 space-y-3">
+
+        <!-- 説明 -->
+        <div class="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-slate-700">
+          <p class="font-bold mb-1">使い方:</p>
+          <ol class="list-decimal pl-5 space-y-0.5">
+            <li>囲い込み職人からエクスポートしたCSV(Shift-JIS)を選択</li>
+            <li>「読み込み」→ プレビュー表示</li>
+            <li>各行の処理(新規/補完/スキップ)を確認</li>
+            <li>「投入実行」で一括登録</li>
+          </ol>
+          <p class="mt-2">想定列: 顧客No / 顧客名 / ふりがな / 性別 / 郵便番号 / 住所１ / 住所２ / 電話-1 / 電話-2 / メールアドレス / 生年月日 / 年齢 / 年代 / 職業 / 動機 / 最終来店日 / 来店回数</p>
+        </div>
+
+        <!-- ファイル選択 -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <input type="file" accept=".csv,text/csv"
+                 @change="onCustomerCsvSelected($event)"
+                 class="text-sm">
+          <select x-model="customerCsvEncoding"
+                  class="px-2 py-1 border border-slate-300 rounded text-xs">
+            <option value="auto">エンコーディング自動判定</option>
+            <option value="shift-jis">Shift-JIS</option>
+            <option value="utf-8">UTF-8</option>
+          </select>
+          <button @click="parseCustomerCsv()" :disabled="!customerCsvFile"
+                  class="px-3 py-1 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white text-xs rounded">
+            読み込み
+          </button>
+          <span class="text-xs text-slate-500" x-show="customerCsvFile" x-text="customerCsvFile.name"></span>
+        </div>
+
+        <!-- エラー表示 -->
+        <div x-show="customerCsvError"
+             class="bg-red-50 border border-red-200 text-red-700 rounded p-2 text-xs"
+             x-text="customerCsvError"></div>
+
+        <!-- プレビュー -->
+        <div x-show="customerCsvRows.length > 0" class="space-y-2">
+
+          <!-- ⚠️ 要確認サマリ -->
+          <div x-show="customerCsvCounts.warnings > 0"
+               class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded text-sm">
+            <p class="font-bold text-amber-900">⚠️ 手動確認が必要な行が <span x-text="customerCsvCounts.warnings"></span>件あります</p>
+            <p class="text-xs text-amber-800 mt-1">
+              同姓同名や識別情報不一致のため、安全のため自動でmergeしていません。<br>
+              下のフィルタで「要確認のみ」を表示して、1件ずつ判断してください。
+            </p>
+          </div>
+
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="text-sm">
+              <span class="font-bold" x-text="customerCsvRows.length"></span>件 /
+              新規 <span class="text-emerald-600 font-bold" x-text="customerCsvCounts.new"></span> /
+              補完 <span class="text-blue-600 font-bold" x-text="customerCsvCounts.merge"></span> /
+              スキップ <span class="text-slate-500 font-bold" x-text="customerCsvCounts.skip"></span>
+              <span x-show="customerCsvCounts.warnings > 0" class="ml-2">
+                / ⚠️ <span class="text-amber-600 font-bold" x-text="customerCsvCounts.warnings"></span>
+              </span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <label class="flex items-center gap-1 text-xs text-slate-600">
+                <input type="checkbox" x-model="customerCsvShowWarningsOnly">
+                要確認のみ表示
+              </label>
+              <button @click="setAllCustomerAction('skip')"
+                      class="text-xs px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded">全てスキップ</button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto max-h-96 overflow-y-auto border border-slate-200 rounded">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 text-slate-600 sticky top-0">
+                <tr>
+                  <th class="px-2 py-1 text-left">#</th>
+                  <th class="px-2 py-1 text-left">顧客No</th>
+                  <th class="px-2 py-1 text-left">氏名</th>
+                  <th class="px-2 py-1 text-left">ふりがな</th>
+                  <th class="px-2 py-1 text-left">電話</th>
+                  <th class="px-2 py-1 text-left">生年月日</th>
+                  <th class="px-2 py-1 text-left">マッチ状況</th>
+                  <th class="px-2 py-1 text-left">処理</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(row, idx) in filteredCustomerCsvRows" :key="row._idx">
+                  <tr class="border-t border-slate-100"
+                      :class="{
+                        'bg-emerald-50': row.action === 'new' && !row.matchWarning,
+                        'bg-blue-50': row.action.startsWith('merge'),
+                        'bg-amber-50': row.matchWarning && row.action !== 'skip',
+                        'bg-slate-100 opacity-60': row.action === 'skip'
+                      }">
+                    <td class="px-2 py-1 text-slate-400" x-text="row._idx + 1"></td>
+                    <td class="px-2 py-1" x-text="row.customerNo || '-'"></td>
+                    <td class="px-2 py-1 font-medium" x-text="row.name"></td>
+                    <td class="px-2 py-1 text-slate-600" x-text="row.furigana || '-'"></td>
+                    <td class="px-2 py-1 text-slate-600" x-text="row.phone1 || '-'"></td>
+                    <td class="px-2 py-1 text-slate-600" x-text="row.birthDate || '-'"></td>
+                    <td class="px-2 py-1">
+                      <div x-show="row.safeAutoMerge" class="text-blue-600">
+                        ✓ 識別情報一致
+                      </div>
+                      <div x-show="row.matchWarning"
+                           class="text-amber-700 font-medium"
+                           x-text="row.matchWarning"></div>
+                      <div x-show="!row.matchedExisting && !row.matchWarning" class="text-slate-400">マッチなし</div>
+                      <!-- 同名候補リスト(複数いる時 or 警告ある時に表示) -->
+                      <div x-show="row.candidateList && row.candidateList.length > 0"
+                           class="mt-1 text-xs text-slate-500">
+                        候補:
+                        <template x-for="(c, ci) in row.candidateList" :key="c.id">
+                          <div class="ml-2">
+                            ・<span x-text="c.name"></span>
+                            <span x-show="c.phone1" class="text-slate-400"> / 📞<span x-text="c.phone1"></span></span>
+                            <span x-show="c.birthDate" class="text-slate-400"> / 🎂<span x-text="c.birthDate"></span></span>
+                            <span x-show="!c.phone1 && !c.birthDate" class="text-slate-400">(識別情報なし)</span>
+                          </div>
+                        </template>
+                      </div>
+                    </td>
+                    <td class="px-2 py-1">
+                      <select x-model="row.action"
+                              class="px-1 py-0.5 border border-slate-300 rounded text-xs bg-white w-full">
+                        <option value="new">新規追加</option>
+                        <option value="skip">スキップ</option>
+                        <!-- 同名候補が1人以上いる時、各候補へのmerge選択肢を出す -->
+                        <template x-for="c in row.candidateList" :key="c.id">
+                          <option :value="'merge:' + c.id"
+                                  x-text="'既存に補完: ' + c.name + (c.phone1 ? ' (📞' + c.phone1 + ')' : '')"></option>
+                        </template>
+                      </select>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 投入ボタン -->
+          <div class="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-200">
+            <div x-show="customerCsvProgress" class="text-xs text-slate-600" x-text="customerCsvProgress"></div>
+            <div class="flex gap-2 ml-auto">
+              <button @click="resetCustomerCsv()"
+                      class="px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded">クリア</button>
+              <button @click="executeCustomerCsv()"
+                      :disabled="customerCsvImporting || customerCsvCounts.new + customerCsvCounts.merge === 0"
+                      class="px-4 py-1 bg-purple-700 hover:bg-purple-800 disabled:bg-slate-300 text-white text-xs rounded">
+                <span x-show="!customerCsvImporting">投入実行</span>
+                <span x-show="customerCsvImporting">投入中...</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </details>
   </section>
 
   <!-- ====== 物販 ====== -->
@@ -1574,6 +1735,15 @@ function app() {
     salesBulkPreview: [],
     salesBulkError: '',
 
+    // ===== 🆕 v0.6: 顧客CSV取込 =====
+    customerCsvFile: null,
+    customerCsvEncoding: 'auto',
+    customerCsvRows: [],
+    customerCsvError: '',
+    customerCsvProgress: '',
+    customerCsvImporting: false,
+    customerCsvShowWarningsOnly: false,
+
     // ===== 経費フォーム(v0.4) =====
     expenseForm: {
       id: null, date: '', category: '仕入', amount: 0,
@@ -1919,6 +2089,415 @@ function app() {
       }
       alert('登録しました');
     },
+
+    // ============================================
+    // ===== 🆕 v0.6: 顧客CSV取込 =====
+    // ============================================
+
+    onCustomerCsvSelected(event) {
+      const f = event.target.files && event.target.files[0];
+      this.customerCsvFile = f || null;
+      this.customerCsvRows = [];
+      this.customerCsvError = '';
+      this.customerCsvProgress = '';
+    },
+
+    resetCustomerCsv() {
+      this.customerCsvFile = null;
+      this.customerCsvRows = [];
+      this.customerCsvError = '';
+      this.customerCsvProgress = '';
+      // ファイル選択UIもクリア
+      const inputs = document.querySelectorAll('input[type="file"][accept*="csv"]');
+      inputs.forEach(i => { i.value = ''; });
+    },
+
+    async parseCustomerCsv() {
+      if (!this.customerCsvFile) return;
+      this.customerCsvError = '';
+      this.customerCsvRows = [];
+      this.customerCsvProgress = '読み込み中...';
+
+      try {
+        const buf = await this.customerCsvFile.arrayBuffer();
+        let text = '';
+
+        if (this.customerCsvEncoding === 'utf-8') {
+          text = new TextDecoder('utf-8').decode(buf);
+        } else if (this.customerCsvEncoding === 'shift-jis') {
+          text = new TextDecoder('shift-jis').decode(buf);
+        } else {
+          // auto: まずShift-JISで試して、文字化けが多そうならUTF-8
+          const sjis = new TextDecoder('shift-jis', { fatal: false }).decode(buf);
+          const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+          // \uFFFD(置換文字)が少ない方を採用
+          const sjisBad = (sjis.match(/\uFFFD/g) || []).length;
+          const utf8Bad = (utf8.match(/\uFFFD/g) || []).length;
+          text = sjisBad <= utf8Bad ? sjis : utf8;
+        }
+
+        // BOM除去
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+        const rows = this.parseCsvText(text);
+        if (rows.length < 2) {
+          this.customerCsvError = 'データ行が見つかりません(ヘッダー+1行以上が必要)';
+          this.customerCsvProgress = '';
+          return;
+        }
+
+        const header = rows[0].map(h => (h || '').trim());
+        const colIndex = (names) => {
+          for (const n of names) {
+            const idx = header.findIndex(h => h === n || h.includes(n));
+            if (idx >= 0) return idx;
+          }
+          return -1;
+        };
+
+        // 列マッピング(囲い込み職人想定)
+        const map = {
+          customerNo: colIndex(['顧客No', '顧客番号', 'No']),
+          name:       colIndex(['顧客名', '氏名', '名前']),
+          furigana:   colIndex(['ふりがな', 'フリガナ', 'カナ']),
+          gender:     colIndex(['性別']),
+          postalCode: colIndex(['郵便番号', '〒']),
+          address1:   colIndex(['住所１', '住所1', '住所']),
+          address2:   colIndex(['住所２', '住所2']),
+          phone1:     colIndex(['電話-1', '電話1', '電話']),
+          phone2:     colIndex(['電話-2', '電話2', '携帯']),
+          email:      colIndex(['メールアドレス', 'メール', 'Email', 'E-mail']),
+          birthDate:  colIndex(['生年月日', '誕生日']),
+          age:        colIndex(['年齢']),
+          ageGroup:   colIndex(['年代']),
+          occupation: colIndex(['職業']),
+          motive:     colIndex(['動機', 'きっかけ']),
+          lastVisitDate: colIndex(['最終来店日', '最終来院日']),
+          totalVisitCount: colIndex(['来店回数', '来院回数', '総来店数'])
+        };
+
+        if (map.name < 0) {
+          this.customerCsvError = '「顧客名」列が見つかりません。CSVのヘッダー行を確認してください';
+          this.customerCsvProgress = '';
+          return;
+        }
+
+        // 既存customers_temp 名前→候補配列マップ(同姓同名対応)
+        const existingByName = {};
+        for (const c of this.customersTemp) {
+          if (c.name) {
+            const key = c.name.trim();
+            if (!existingByName[key]) existingByName[key] = [];
+            existingByName[key].push(c);
+          }
+        }
+
+        // 電話番号正規化(ハイフン・全角・空白除去)
+        const normPhone = (p) => (p || '').replace(/[\s\-－—ー]/g, '').replace(/[０-９]/g, ch =>
+          String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
+        );
+
+        const out = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r || r.length === 0 || r.every(c => !c)) continue;
+          const get = (key) => map[key] >= 0 ? (r[map[key]] || '').trim() : '';
+
+          const name = get('name');
+          if (!name) continue;  // 名前なし行はスキップ
+
+          const phone1 = get('phone1');
+          const phone2 = get('phone2');
+          const birthDate = this.normalizeDate(get('birthDate'));
+
+          // 同名候補を取得
+          const candidates = existingByName[name] || [];
+          const phoneN = normPhone(phone1);
+          const phone2N = normPhone(phone2);
+
+          // 候補ごとに識別情報の一致度を判定
+          const scoredCandidates = candidates.map(c => {
+            const cPhone1 = normPhone(c.phone1);
+            const cPhone2 = normPhone(c.phone2);
+            const cBirth = c.birthDate || '';
+            // 一致判定
+            const phoneMatch = phoneN && (phoneN === cPhone1 || phoneN === cPhone2)
+                            || phone2N && (phone2N === cPhone1 || phone2N === cPhone2);
+            const birthMatch = birthDate && cBirth && birthDate === cBirth;
+            return { candidate: c, phoneMatch, birthMatch };
+          });
+
+          // 自動マージ可否判定(極力ミスを避ける厳しめ条件)
+          // ・候補ゼロ → 新規
+          // ・候補1人 かつ 電話or生年月日が一致 → 自動merge(安全)
+          // ・候補1人 かつ 識別情報なし(既存temp自動生成) → 要手動確認
+          // ・候補1人 かつ 識別情報あるが不一致 → 別人の可能性大、要手動確認
+          // ・候補2人以上 → 必ず要手動確認
+          let action = 'new';
+          let matchedId = null;
+          let matchedName = '';
+          let matchWarning = '';
+          let safeAutoMerge = false;
+
+          if (candidates.length === 0) {
+            action = 'new';
+          } else if (candidates.length === 1) {
+            const sc = scoredCandidates[0];
+            const c = sc.candidate;
+            const cHasIdInfo = normPhone(c.phone1) || normPhone(c.phone2) || c.birthDate;
+
+            if (sc.phoneMatch || sc.birthMatch) {
+              // 識別情報一致 → 安全に自動merge
+              action = 'merge:' + c.id;
+              matchedId = c.id;
+              matchedName = c.name;
+              safeAutoMerge = true;
+            } else if (!cHasIdInfo) {
+              // 既存に識別情報なし(自動生成temp) → 同名1人なので比較的安全だが念のため警告
+              action = 'new';  // ⚠️ デフォルト新規(安全側)
+              matchedId = c.id;
+              matchedName = c.name;
+              matchWarning = '同名1人(既存に識別情報なし) — 要確認';
+            } else {
+              // 識別情報あるが不一致 → 別人の可能性
+              action = 'new';
+              matchedId = c.id;
+              matchedName = c.name;
+              matchWarning = '同名だが電話/生年月日が不一致 — 別人の可能性';
+            }
+          } else {
+            // 同姓同名2人以上 → 絶対に自動マージしない
+            action = 'new';
+            matchWarning = `⚠️ 同名${candidates.length}人 — 必ず手動確認`;
+          }
+
+          out.push({
+            _idx: out.length,  // 元配列順インデックス(フィルタ表示でも保持)
+            customerNo: get('customerNo'),
+            name: name,
+            furigana: this.toHiragana(get('furigana')),
+            gender: get('gender'),
+            postalCode: get('postalCode'),
+            address1: get('address1'),
+            address2: get('address2'),
+            phone1: phone1,
+            phone2: phone2,
+            email: get('email'),
+            birthDate: birthDate,
+            age: this.toNumber(get('age')),
+            ageGroup: get('ageGroup'),
+            occupation: get('occupation'),
+            motive: get('motive'),
+            lastVisitDate: this.normalizeDate(get('lastVisitDate')),
+            totalVisitCount: this.toNumber(get('totalVisitCount')),
+            // プレビュー用
+            matchedExisting: candidates.length > 0,
+            matchedId: matchedId,
+            matchedName: matchedName,
+            matchWarning: matchWarning,
+            safeAutoMerge: safeAutoMerge,
+            // 同名候補リスト(手動選択用)
+            candidateList: candidates.map(c => ({
+              id: c.id,
+              name: c.name,
+              phone1: c.phone1 || '',
+              phone2: c.phone2 || '',
+              birthDate: c.birthDate || '',
+              address1: c.address1 || ''
+            })),
+            action: action
+          });
+        }
+
+        this.customerCsvRows = out;
+        this.customerCsvProgress = `${out.length}件読み込み完了`;
+      } catch (err) {
+        console.error(err);
+        this.customerCsvError = '読み込みエラー: ' + err.message;
+        this.customerCsvProgress = '';
+      }
+    },
+
+    // 簡易CSVパーサ(ダブルクォート対応)
+    parseCsvText(text) {
+      const rows = [];
+      let cur = [];
+      let cell = '';
+      let inQuote = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuote) {
+          if (ch === '"') {
+            if (text[i + 1] === '"') { cell += '"'; i++; }
+            else inQuote = false;
+          } else {
+            cell += ch;
+          }
+        } else {
+          if (ch === '"') inQuote = true;
+          else if (ch === ',') { cur.push(cell); cell = ''; }
+          else if (ch === '\r') { /* skip */ }
+          else if (ch === '\n') { cur.push(cell); rows.push(cur); cur = []; cell = ''; }
+          else cell += ch;
+        }
+      }
+      if (cell.length > 0 || cur.length > 0) { cur.push(cell); rows.push(cur); }
+      return rows;
+    },
+
+    // カタカナ→ひらがな(囲い込み職人がカタカナで出力する場合に対応)
+    toHiragana(s) {
+      if (!s) return '';
+      return s.replace(/[\u30A1-\u30F6]/g, ch =>
+        String.fromCharCode(ch.charCodeAt(0) - 0x60)
+      );
+    },
+
+    toNumber(s) {
+      if (!s) return null;
+      const n = parseInt(String(s).replace(/[^\d]/g, ''), 10);
+      return isNaN(n) ? null : n;
+    },
+
+    // 日付正規化: "2024/3/5", "2024-3-5", "S50.4.1" 等 → "YYYY-MM-DD" or null
+    normalizeDate(s) {
+      if (!s) return null;
+      s = s.trim();
+      // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+      let m = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+      if (m) {
+        return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+      }
+      // 和暦は今回スキップ(必要なら拡張)
+      return null;
+    },
+
+    setAllCustomerAction(action) {
+      // 安全のため「全て新規」「全て補完」は廃止。「全てスキップ」のみ提供。
+      // 各行の判断は手動で行う。
+      if (action !== 'skip') return;
+      for (const r of this.customerCsvRows) {
+        r.action = 'skip';
+      }
+    },
+
+    get filteredCustomerCsvRows() {
+      if (this.customerCsvShowWarningsOnly) {
+        return this.customerCsvRows.filter(r => r.matchWarning);
+      }
+      return this.customerCsvRows;
+    },
+
+    get customerCsvCounts() {
+      const c = { new: 0, merge: 0, skip: 0, warnings: 0 };
+      for (const r of this.customerCsvRows) {
+        if (r.action === 'new') c.new++;
+        else if (r.action && r.action.startsWith('merge')) c.merge++;
+        else c.skip++;
+        // 要確認警告(処理に関わらずカウント)
+        if (r.matchWarning) c.warnings++;
+      }
+      return c;
+    },
+
+    async executeCustomerCsv() {
+      if (this.customerCsvRows.length === 0) return;
+      const counts = this.customerCsvCounts;
+      const total = counts.new + counts.merge;
+      if (total === 0) return;
+
+      // 警告行が残っているかチェック
+      const remainingWarnings = this.customerCsvRows.filter(r =>
+        r.matchWarning && r.action !== 'skip'
+      ).length;
+
+      let warnMsg = '';
+      if (remainingWarnings > 0) {
+        warnMsg = `\n\n⚠️ 注意: ${remainingWarnings}件の要確認行がスキップ以外になっています。\nこれらは別人の可能性があります。本当に投入しますか?`;
+      }
+
+      if (!confirm(`新規追加 ${counts.new}件 / 既存補完 ${counts.merge}件 を投入します。${warnMsg}`)) return;
+
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.customerCsvImporting = true;
+      let success = 0;
+      let errors = 0;
+
+      try {
+        const target = this.customerCsvRows.filter(r => r.action !== 'skip');
+        for (let i = 0; i < target.length; i++) {
+          const r = target[i];
+          this.customerCsvProgress = `投入中... ${i + 1} / ${target.length}`;
+
+          try {
+            const payload = this.buildCustomerPayload(r);
+            let ref;
+            // action は 'new' or 'merge:<id>' の形式
+            if (r.action && r.action.startsWith('merge:')) {
+              const targetId = r.action.substring(6);  // 'merge:'を除去
+              if (!targetId) {
+                throw new Error('merge先IDが不正');
+              }
+              ref = doc(db, 'customers_temp', targetId);
+              payload.updatedAt = serverTimestamp();
+            } else {
+              ref = doc(collection(db, 'customers_temp'));
+              payload.createdAt = serverTimestamp();
+              payload.updatedAt = serverTimestamp();
+              payload.source = 'csv-kakoikomi';
+            }
+            // mergeの場合は補完(空文字を上書きしないよう、空はpayloadから除外済み)
+            await setDoc(ref, payload, { merge: true });
+            success++;
+          } catch (err) {
+            console.error('行' + (i + 1) + 'エラー', err);
+            errors++;
+          }
+        }
+
+        this.customerCsvProgress = `完了: 成功 ${success}件 / エラー ${errors}件`;
+        alert(`投入完了\n成功: ${success}件\nエラー: ${errors}件`);
+        if (errors === 0) {
+          // 成功時は2秒後にプレビューをクリア
+          setTimeout(() => this.resetCustomerCsv(), 2000);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('投入処理エラー: ' + err.message);
+      } finally {
+        this.customerCsvImporting = false;
+      }
+    },
+
+    // CSV行 → Firestore保存形式
+    // mergeでもnewでも同じビルダー(空フィールドは除外して上書き防止)
+    buildCustomerPayload(r) {
+      const p = { name: r.name };
+      const setIf = (key, val) => {
+        if (val !== null && val !== undefined && val !== '') p[key] = val;
+      };
+      setIf('customerNo', r.customerNo);
+      setIf('furigana', r.furigana);
+      setIf('gender', r.gender);
+      setIf('postalCode', r.postalCode);
+      setIf('address1', r.address1);
+      setIf('address2', r.address2);
+      setIf('phone1', r.phone1);
+      setIf('phone2', r.phone2);
+      setIf('email', r.email);
+      setIf('birthDate', r.birthDate);
+      setIf('age', r.age);
+      setIf('ageGroup', r.ageGroup);
+      setIf('occupation', r.occupation);
+      setIf('motive', r.motive);
+      setIf('lastVisitDate', r.lastVisitDate);
+      setIf('totalVisitCount', r.totalVisitCount);
+      p.importedFrom = 'kakoikomi';
+      p.importedAt = window._fb.serverTimestamp();
+      return p;
+    },
+
+    // ===== /v0.6 顧客CSV取込 =====
 
     // ===== v0.3 物販機能 =====
     get activeProducts() {
