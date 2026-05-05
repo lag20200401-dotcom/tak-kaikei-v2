@@ -1733,7 +1733,9 @@ function app() {
     cloudStatus: '初期化中',
     saving: false,
     fbReady: false,
-
+// 🆕 v0.6.4: リスナー管理 + customers_temp キャッシュ制御
+    unsubscribers: [],
+    customersTempLastFetch: 0,  // ms、0なら未取得
     // タブ定義
     tabs: [
       { id: 'dashboard', label: 'ダッシュボード', placeholder: false },
@@ -1881,44 +1883,62 @@ function app() {
         this.lockError = 'パスコードが違います';
       }
     },
-    lock() { this.unlocked = false; },
+    lock() {
+      this.unsubscribeAll();
+      this.cloudStatus = 'ロック中';
+      this.unlocked = false;
+    },
 
-    // ===== Firestore 購読 =====
-    subscribeAll() {
-      const { db, collection, query, orderBy, onSnapshot } = window._fb;
+    // ===== Firestore 購読(v0.6.4: customers_temp は getDocs に変更、他は unsubscribe 対応) =====
+    async subscribeAll() {
+      const { db, collection, query, orderBy, onSnapshot, getDocs } = window._fb;
+
+      // 既存リスナーを全停止(冪等性確保: ロック解除を繰り返してもリスナーが増殖しない)
+      this.unsubscribeAll();
+
       this.cloudStatus = '接続中';
 
-      onSnapshot(query(collection(db, 'products'), orderBy('name')), snap => {
+      // ① customers_temp は getDocs で1回だけ取得(localStorageキャッシュ優先)
+      try {
+        await this.loadCustomersTempOnce();
+      } catch (err) {
+        console.error('customers_temp 取得エラー:', err);
+        this.cloudStatus = '接続エラー';
+      }
+
+      // ② サイズの小さいコレクションは onSnapshot 維持(リアルタイム性を保つ)
+      //    unsubscribe 関数を保管しておき、lock時に停止できるようにする
+      const u1 = onSnapshot(query(collection(db, 'products'), orderBy('name')), snap => {
         this.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u1);
 
-      onSnapshot(query(collection(db, 'visits'), orderBy('date', 'desc')), snap => {
+      const u2 = onSnapshot(query(collection(db, 'visits'), orderBy('date', 'desc')), snap => {
         this.visits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u2);
 
-      onSnapshot(collection(db, 'customers_temp'), snap => {
-        this.customersTemp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      });
-
-      onSnapshot(query(collection(db, 'sales'), orderBy('date', 'desc')), snap => {
+      const u3 = onSnapshot(query(collection(db, 'sales'), orderBy('date', 'desc')), snap => {
         this.sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u3);
 
-      onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => {
+      const u4 = onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), snap => {
         this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u4);
 
-      onSnapshot(query(collection(db, 'ads'), orderBy('date', 'desc')), snap => {
+      const u5 = onSnapshot(query(collection(db, 'ads'), orderBy('date', 'desc')), snap => {
         this.ads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u5);
 
-      // 🆕 v0.5: 銀行預け入れ購読
-      onSnapshot(query(collection(db, 'cash_deposits'), orderBy('date', 'desc')), snap => {
+      const u6 = onSnapshot(query(collection(db, 'cash_deposits'), orderBy('date', 'desc')), snap => {
         this.cashDeposits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error(err); });
+      this.unsubscribers.push(u6);
 
-      // 🆕 v0.5: 出力履歴購読
-      onSnapshot(query(collection(db, 'monthlyExports'), orderBy('yearMonth', 'desc')), snap => {
+      const u7 = onSnapshot(query(collection(db, 'monthlyExports'), orderBy('yearMonth', 'desc')), snap => {
         this.monthlyExports = snap.docs.map(d => {
           const data = d.data();
           let dt = null;
@@ -1935,6 +1955,95 @@ function app() {
           };
         });
       }, err => { console.error(err); });
+      this.unsubscribers.push(u7);
+    },
+
+    // 🆕 v0.6.4: 全リスナー停止
+    unsubscribeAll() {
+      for (const u of this.unsubscribers) {
+        try { if (typeof u === 'function') u(); } catch (e) { console.warn(e); }
+      }
+      this.unsubscribers = [];
+    },
+
+    // 🆕 v0.6.4: customers_temp を1回だけ取得(localStorageキャッシュで2回目以降を高速化)
+    async loadCustomersTempOnce() {
+      const { db, collection, getDocs } = window._fb;
+      const CACHE_KEY = 'tak_customersTemp_cache_v1';
+      const CACHE_TTL_MS = 24 * 60 * 60 * 1000;  // 24時間
+
+      // ① localStorageキャッシュチェック
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const obj = JSON.parse(cached);
+          const age = Date.now() - (obj.savedAt || 0);
+          if (obj.data && Array.isArray(obj.data) && age < CACHE_TTL_MS) {
+            this.customersTemp = obj.data;
+            this.customersTempLastFetch = obj.savedAt;
+            console.log('✓ customers_temp: localStorageから ' + obj.data.length + '件 復元 (' + Math.round(age/1000/60) + '分前のキャッシュ)');
+            return;  // Firestoreは叩かない
+          }
+        }
+      } catch (e) {
+        console.warn('localStorage読込失敗:', e);
+      }
+
+      // ② キャッシュ無効 → getDocsで取得
+      console.log('▶ customers_temp: Firestoreから取得中...');
+      const snap = await getDocs(collection(db, 'customers_temp'));
+      this.customersTemp = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      this.customersTempLastFetch = Date.now();
+      console.log('✓ customers_temp: Firestoreから ' + this.customersTemp.length + '件 取得');
+
+      // ③ localStorageに保存
+      this.persistCustomersTempCache();
+    },
+
+    // 🆕 v0.6.4: customers_temp を強制再取得(キャッシュ破棄)
+    async refreshCustomersTemp() {
+      try { localStorage.removeItem('tak_customersTemp_cache_v1'); } catch (e) {}
+      this.customersTempLastFetch = 0;
+      await this.loadCustomersTempOnce();
+    },
+
+    // 🆕 v0.6.4: メモリ上の customersTemp に1件 追加/更新 + localStorageキャッシュも更新
+    upsertCustomerLocal(customer) {
+      if (!customer || !customer.id) return;
+      const idx = this.customersTemp.findIndex(c => c.id === customer.id);
+      if (idx >= 0) {
+        this.customersTemp[idx] = { ...this.customersTemp[idx], ...customer };
+      } else {
+        this.customersTemp.push(customer);
+      }
+      this.persistCustomersTempCache();
+    },
+
+    // 🆕 v0.6.4: メモリ上の customersTemp から1件削除 + localStorageキャッシュも更新
+    removeCustomerLocal(customerId) {
+      this.customersTemp = this.customersTemp.filter(c => c.id !== customerId);
+      this.persistCustomersTempCache();
+    },
+
+    // 🆕 v0.6.4: customers_temp を localStorage に保存
+    persistCustomersTempCache() {
+      try {
+        const sanitized = this.customersTemp.map(c => {
+          const out = {};
+          for (const k of Object.keys(c)) {
+            const v = c[k];
+            if (v && typeof v === 'object' && typeof v.toDate === 'function') continue;
+            out[k] = v;
+          }
+          return out;
+        });
+        localStorage.setItem('tak_customersTemp_cache_v1', JSON.stringify({
+          savedAt: Date.now(),
+          data: sanitized
+        }));
+      } catch (e) {
+        console.warn('localStorageキャッシュ更新失敗:', e);
+      }
     },
 
     // ===== 共通ユーティリティ =====
@@ -2035,12 +2144,17 @@ function app() {
           } else {
             const newRef = doc(collection(db, 'customers_temp'));
             customerId = newRef.id;
-            await setDoc(newRef, {
+            const newCustomerData = {
               name: v.customerName.trim(),
-              createdAt: serverTimestamp(),
               source: 'visit-auto',
               visitCount: 1
+            };
+            await setDoc(newRef, {
+              ...newCustomerData,
+              createdAt: serverTimestamp()
             });
+            // 🆕 v0.6.4: メモリ + localStorageキャッシュも更新
+            this.upsertCustomerLocal({ id: customerId, ...newCustomerData });
           }
         }
 
@@ -2518,7 +2632,15 @@ function app() {
           }
         }
 
-        this.customerCsvProgress = `完了: 成功 ${success}件 / エラー ${errors}件`;
+        this.customerCsvProgress = `完了: 成功 ${success}件 / エラー ${errors}件 / customers_temp再取得中...`;
+        // 🆕 v0.6.4: 大量投入後はメモリの整合性を保つため強制再取得
+        try {
+          await this.refreshCustomersTemp();
+          this.customerCsvProgress = `完了: 成功 ${success}件 / エラー ${errors}件 / customers_temp ${this.customersTemp.length}件`;
+        } catch (e) {
+          console.warn('customers_temp再取得エラー:', e);
+          this.customerCsvProgress = `完了: 成功 ${success}件 / エラー ${errors}件 (キャッシュ未更新)`;
+        }
         alert(`投入完了\n成功: ${success}件\nエラー: ${errors}件`);
         if (errors === 0) {
           // 成功時は2秒後にプレビューをクリア
@@ -2635,6 +2757,10 @@ function app() {
           }
         }
         
+        // 🆕 v0.6.4: 削除されたIDをメモリ + localStorageキャッシュからも除去
+        for (const c of this.testDataFound) {
+          this.removeCustomerLocal(c.id);
+        }
         alert(`削除完了\n成功: ${success} 件\nエラー: ${errors} 件`);
         // 状態リセット
         this.testDataFound = null;
@@ -2764,12 +2890,17 @@ function app() {
           } else {
             const newRef = doc(collection(db, 'customers_temp'));
             customerId = newRef.id;
-            await setDoc(newRef, {
+            const newCustomerData = {
               name: trimmedName,
-              createdAt: serverTimestamp(),
               source: 'sales-auto',
               visitCount: 0
+            };
+            await setDoc(newRef, {
+              ...newCustomerData,
+              createdAt: serverTimestamp()
             });
+            // 🆕 v0.6.4: メモリ + localStorageキャッシュも更新
+            this.upsertCustomerLocal({ id: customerId, ...newCustomerData });
           }
         }
 
