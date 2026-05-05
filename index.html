@@ -134,14 +134,20 @@
           </div>
         </div>
 
-        <!-- メニュー(自由入力) -->
+       <!-- メニュー(プルダウン+自由入力ハイブリッド) v0.6.5 -->
         <div class="md:col-span-3">
           <label class="block text-xs text-slate-600 mb-1">メニュー *</label>
+          <select @change="applyMenuPreset($event.target.value); $event.target.value=''"
+            class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-teal-50 mb-1 cursor-pointer">
+            <option value="">📋 プリセットから選択...</option>
+            <template x-for="preset in MENU_PRESETS" :key="preset.name">
+              <option :value="preset.name" x-text="preset.name + ' (¥' + preset.amount.toLocaleString() + ')'"></option>
+            </template>
+          </select>
           <input type="text" x-model="visitForm.menu"
             placeholder="例: 整体60分 / 回数券消化"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
-
         <!-- 金額 -->
         <div class="md:col-span-2">
           <label class="block text-xs text-slate-600 mb-1">金額(円)</label>
@@ -1750,8 +1756,19 @@ function app() {
 
     // マスター
     staffList: ['TAK', '日向'],
-    paymentMethods: ['現金', 'カード', 'PayPay', '銀行振込', '回数券消化', 'サブスク'],
+    paymentMethods: ['現金', 'ライフ', 'サブスク', 'PayPay', '回数券消化'],
 
+    // 🆕 v0.6.5: 来院記録メニュープリセット
+    MENU_PRESETS: [
+      { name: '整体60分',        amount: 11000,  paymentMethod: '現金'       },
+      { name: 'メンテナンス',    amount: 5980,   paymentMethod: '現金'       },
+      { name: 'サブスク',        amount: 8800,   paymentMethod: 'サブスク'   },
+      { name: '回数券消化',      amount: 0,      paymentMethod: '回数券消化' },
+      { name: 'インディバ60分',  amount: 11000,  paymentMethod: '現金'       },
+      { name: '回数券購入10回',  amount: 104500, paymentMethod: '現金'       },
+      { name: '回数券購入20回',  amount: 198000, paymentMethod: '現金'       },
+      { name: '回数券購入30回',  amount: 280500, paymentMethod: '現金'       },
+    ],
     // 経費・広告費用(v0.4)
     expensePaymentMethods: ['現金', 'カード', '銀行振込', 'PayPay', 'その他'],
     expenseCategories: ['仕入', '販促費', '家賃', '光熱費', '通信費', '消耗品', '交通費', 'その他'],
@@ -2096,6 +2113,14 @@ function app() {
       this.visitForm.customerName = c.name;
       this.visitForm.customerId = c.id;
       this.showSuggest = false;
+    },// 🆕 v0.6.5: メニュープリセット選択時の自動入力
+    applyMenuPreset(presetName) {
+      if (!presetName) return;
+      const preset = this.MENU_PRESETS.find(p => p.name === presetName);
+      if (!preset) return;
+      this.visitForm.menu = preset.name;
+      this.visitForm.amount = preset.amount;
+      this.visitForm.paymentMethod = preset.paymentMethod;
     },
 
     autoCategory() {
