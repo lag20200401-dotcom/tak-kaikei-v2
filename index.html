@@ -3822,6 +3822,123 @@ function app() {
       const cost = Number(this.purchaseForm.unitCost) || 0;
       this.purchaseForm.totalCost = qty * cost;
     },
+    async savePurchase() {
+      if (!this.canSavePurchase()) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.purchaseMessage = '';
+
+      try {
+        const p = this.purchaseForm;
+        const qty = Number(p.quantity) || 0;
+        const unitCost = Number(p.unitCost) || 0;
+        const totalCost = qty * unitCost;
+
+        // 仕入レコードのID決定
+        const purchaseRef = p.id
+          ? doc(db, 'purchases', p.id)
+          : doc(collection(db, 'purchases'));
+        const purchaseId = purchaseRef.id;
+
+        // 連携経費レコードのID決定(新規/編集を見極め)
+        let linkedExpenseId = p.linkedExpenseId;
+        let expenseRef;
+        if (linkedExpenseId) {
+          // 既存連携あり → 更新
+          expenseRef = doc(db, 'expenses', linkedExpenseId);
+        } else {
+          // 新規 → 新IDを発行
+          expenseRef = doc(collection(db, 'expenses'));
+          linkedExpenseId = expenseRef.id;
+        }
+
+        // 経費の備考自動生成
+        const expenseNote = `[仕入連携] ${p.productName} × ${qty}`
+          + (p.supplier ? ` / ${p.supplier}` : '')
+          + (p.note ? ` / ${p.note}` : '');
+
+        // 仕入データ
+        const purchaseData = {
+          date: p.date,
+          productId: p.productId || null,
+          productName: p.productName,
+          quantity: qty,
+          unitCost: unitCost,
+          totalCost: totalCost,
+          paymentMethod: p.paymentMethod,
+          supplier: p.supplier || '',
+          note: p.note || '',
+          linkedExpenseId: linkedExpenseId,
+          updatedAt: serverTimestamp()
+        };
+        if (!p.id) purchaseData.createdAt = serverTimestamp();
+
+        // 経費データ(自動連携)
+        const expenseData = {
+          date: p.date,
+          category: '仕入',
+          amount: totalCost,
+          paymentMethod: p.paymentMethod,
+          note: expenseNote,
+          isAutoPurchase: true,
+          linkedPurchaseId: purchaseId,
+          updatedAt: serverTimestamp()
+        };
+        if (!p.linkedExpenseId) expenseData.createdAt = serverTimestamp();
+
+        // 同時保存(順序: 経費 → 仕入。経費が先に作られてれば仕入の参照が確実)
+        await setDoc(expenseRef, expenseData, { merge: true });
+        await setDoc(purchaseRef, purchaseData, { merge: true });
+
+        this.purchaseMessage = p.id ? '更新しました' : '保存しました(経費にも自動転記)';
+        this.purchaseMessageType = 'ok';
+        this.resetPurchaseForm();
+        setTimeout(() => this.purchaseMessage = '', 3000);
+      } catch (err) {
+        console.error(err);
+        this.purchaseMessage = 'エラー: ' + err.message;
+        this.purchaseMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+    editPurchase(p) {
+      this.purchaseForm = {
+        id: p.id,
+        date: p.date || this.todayStr(),
+        productId: p.productId || '',
+        productName: p.productName || '',
+        quantity: Number(p.quantity) || 1,
+        unitCost: Number(p.unitCost) || 0,
+        totalCost: Number(p.totalCost) || 0,
+        paymentMethod: p.paymentMethod || 'カード',
+        supplier: p.supplier || '',
+        note: p.note || '',
+        linkedExpenseId: p.linkedExpenseId || null
+      };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    async deletePurchase(p) {
+      const label = `${p.date} ${p.productName} × ${p.quantity}個 (¥${(p.totalCost||0).toLocaleString()})`;
+      if (!confirm(`仕入記録を削除します:\n\n${label}\n\n連動して経費の「仕入」レコードも削除されます。よろしいですか?`)) return;
+
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        // 連携経費レコードがあれば先に削除
+        if (p.linkedExpenseId) {
+          try {
+            await deleteDoc(doc(db, 'expenses', p.linkedExpenseId));
+          } catch (e) {
+            console.warn('連携経費の削除に失敗(既に削除済みの可能性):', e);
+          }
+        }
+        // 仕入レコード本体を削除
+        await deleteDoc(doc(db, 'purchases', p.id));
+      } catch (err) {
+        alert('削除エラー: ' + err.message);
+      }
+    },
 
     // ============================================
     // ===== 🆕 v0.5: 月末Excel出力機能 =====
