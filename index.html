@@ -4188,6 +4188,12 @@ function app() {
         log(`  ✓ 経費: ${data.expenses.length}件`);
         log(`  ✓ 広告費: ${data.ads.length}件`);
         log(`  ✓ 銀行預入: ${data.cashDeposits.length}件`);
+        const purchases = this.purchases.filter(p => (p.date || '').startsWith(ym));
+      // 前月以前の仕入(累計在庫計算用)
+      const prevPurchases = this.purchases.filter(p => {
+        const d = p.date || '';
+        return d && d < `${ym}-01`;
+      });
 
         log('📊 現金出納帳を生成中...');
         const cashbookWb = this.buildCashbookWorkbook(ym, data);
@@ -4267,6 +4273,7 @@ function app() {
 
       return {
         visits, sales, expenses, ads, cashDeposits,
+        purchases, prevPurchases,
         products: this.products,
         prevSales,
         openingBalance,
@@ -4406,7 +4413,11 @@ function app() {
         const consumed = data.prevSales
           .filter(s => s.productId === productId)
           .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
-        return initial - consumed;
+        // 🆕 v0.7: 前月までの仕入も加算
+        const prevPurchased = (data.prevPurchases || [])
+          .filter(p => p.productId === productId)
+          .reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
+        return initial - consumed + prevPurchased;
       };
 
       const activeProducts = data.products.filter(p => p.active !== false);
@@ -4418,14 +4429,22 @@ function app() {
         const productSales = data.sales.filter(s => s.productId === product.id || s.productName === product.name);
 
         let currentStock = calcOpeningStock(product.id);
-        let totalCash = 0, totalOther = 0, totalSample = 0;
+        let totalCash = 0, totalOther = 0, totalSample = 0, totalPurchase = 0;
+
+        // この商品の当月仕入を日付別にマップ化
+        const monthPurchases = (data.purchases || []).filter(p =>
+          p.productId === product.id || p.productName === product.name
+        );
 
         rows.push([`${m}/1`, currentStock, '', '', '', '', currentStock, '', '']);
 
         for (let day = 1; day <= data.lastDay; day++) {
           const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
           const dailySales = productSales.filter(s => s.date === dateStr);
-          if (dailySales.length === 0) continue;
+          const dailyPurchases = monthPurchases.filter(p => p.date === dateStr);
+
+          // この日に売上も仕入も無いならスキップ
+          if (dailySales.length === 0 && dailyPurchases.length === 0) continue;
 
           const cashQty = dailySales.filter(s => s.paymentMethod === '現金' && !s.isSample)
                                      .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
@@ -4433,23 +4452,29 @@ function app() {
                                       .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
           const sampleQty = dailySales.filter(s => s.isSample)
                                        .reduce((sum, s) => sum + (Number(s.quantity) || 0), 0);
+          const purchaseQty = dailyPurchases.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
           const customers = [...new Set(dailySales.map(s => s.customerName).filter(Boolean))].join('/');
-          const staff = [...new Set(dailySales.map(s => s.staff).filter(Boolean))].join('/');
+          const purchaseStaff = [...new Set(dailyPurchases.map(p => p.supplier).filter(Boolean))].join('/');
+          const saleStaff = [...new Set(dailySales.map(s => s.staff).filter(Boolean))].join('/');
+          const staff = saleStaff || (purchaseQty > 0 ? '(仕入)' : '');
 
           const openingDay = currentStock;
-          currentStock = currentStock - cashQty - otherQty - sampleQty;
+          currentStock = currentStock + purchaseQty - cashQty - otherQty - sampleQty;
 
           rows.push([
-            `${m}/${day}`, openingDay, '',
+            `${m}/${day}`, openingDay,
+            purchaseQty || '',
             cashQty || '', otherQty || '', sampleQty || '',
-            currentStock, staff, customers
+            currentStock, staff,
+            customers || (purchaseQty > 0 ? purchaseStaff : '')
           ]);
           totalCash += cashQty;
           totalOther += otherQty;
           totalSample += sampleQty;
+          totalPurchase += purchaseQty;
         }
 
-        rows.push(['合計', '', '', totalCash, totalOther, totalSample, currentStock, '', '']);
+        rows.push(['合計', '', totalPurchase || '', totalCash, totalOther, totalSample, currentStock, '', '']);
         rows.push([]);
       });
 
