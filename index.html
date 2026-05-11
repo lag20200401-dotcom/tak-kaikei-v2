@@ -781,7 +781,190 @@
 
   </section>
 
-  <!-- ====== 経費(v0.4) ====== -->
+  <!-- ====== 🆕 v0.7: 仕入 ====== -->
+  <section x-show="currentTab==='purchases'" class="space-y-4">
+
+    <!-- 入力フォーム -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">📦 仕入記録</h2>
+          <p class="text-xs text-slate-500 mt-1">商品の仕入を記録します。保存すると経費タブに「仕入」カテゴリで自動転記されます。</p>
+        </div>
+        <div class="text-xs text-slate-400" x-text="'本日: ' + todayStr()"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <!-- 日付 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">仕入日 *</label>
+          <input type="date" x-model="purchaseForm.date"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- 商品選択 -->
+        <div class="md:col-span-4">
+          <label class="block text-xs text-slate-600 mb-1">商品 *</label>
+          <select x-model="purchaseForm.productId" @change="onPurchaseProductSelect()"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <option value="">-- 商品を選択 --</option>
+            <template x-for="p in activeProducts" :key="p.id">
+              <option :value="p.id" x-text="p.name"></option>
+            </template>
+          </select>
+          <p class="text-xs text-slate-400 mt-1">商品マスター未登録の場合は、先に商品マスタータブで追加してください</p>
+        </div>
+
+        <!-- 数量 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">数量 *</label>
+          <input type="number" x-model.number="purchaseForm.quantity" min="1"
+            @input="recalcPurchaseTotal()"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- 単価 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">代理店単価(円)*</label>
+          <input type="number" x-model.number="purchaseForm.unitCost"
+            @input="recalcPurchaseTotal()"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- 合計 -->
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-600 mb-1">合計(自動計算)</label>
+          <input type="number" x-model.number="purchaseForm.totalCost"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold bg-slate-50">
+        </div>
+
+        <!-- 支払方法 -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">支払方法 *</label>
+          <select x-model="purchaseForm.paymentMethod"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="p in purchasePaymentMethods" :key="p">
+              <option :value="p" x-text="p"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 仕入先 -->
+        <div class="md:col-span-4">
+          <label class="block text-xs text-slate-600 mb-1">仕入先(任意)</label>
+          <input type="text" x-model="purchaseForm.supplier" placeholder="例: テラヴィータ社"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+
+        <!-- 備考 -->
+        <div class="md:col-span-5">
+          <label class="block text-xs text-slate-600 mb-1">備考(任意)</label>
+          <input type="text" x-model="purchaseForm.note" placeholder="任意"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+
+      <!-- 保存ボタン -->
+      <div class="flex justify-end gap-2 mt-4">
+        <button @click="resetPurchaseForm()"
+          class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">クリア</button>
+        <button @click="savePurchase()" :disabled="!canSavePurchase() || saving"
+          class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg">
+          <span x-show="!saving" x-text="purchaseForm.id ? '更新' : '保存(+経費自動転記)'"></span>
+          <span x-show="saving">保存中...</span>
+        </button>
+      </div>
+
+      <div x-show="purchaseMessage" class="mt-3 text-sm"
+           :class="purchaseMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+           x-text="purchaseMessage"></div>
+    </div>
+
+    <!-- 月別フィルタ -->
+    <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2">
+        <label class="text-sm text-slate-600">表示月:</label>
+        <input type="month" x-model="purchaseFilterMonth"
+               class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+        <button @click="purchaseFilterMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+        <button @click="purchaseFilterMonth = ''" class="text-xs text-slate-500 hover:underline">全期間</button>
+      </div>
+      <div class="text-sm text-slate-600">
+        <span x-text="filteredPurchases.length"></span>件 / 仕入合計
+        <span class="font-bold text-slate-800" x-text="'¥' + purchaseTotalAmount().toLocaleString()"></span>
+      </div>
+    </div>
+
+    <!-- 商品別集計 -->
+    <div x-show="purchaseByProduct.length > 0" class="bg-white rounded-xl shadow p-5">
+      <h3 class="text-sm font-bold text-slate-700 mb-3">📊 商品別仕入集計</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">商品名</th>
+              <th class="px-3 py-2 text-right">仕入数</th>
+              <th class="px-3 py-2 text-right">仕入金額</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in purchaseByProduct" :key="row.productName">
+              <tr class="border-t border-slate-100">
+                <td class="px-3 py-2" x-text="row.productName"></td>
+                <td class="px-3 py-2 text-right" x-text="row.totalQty"></td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + row.totalCost.toLocaleString()"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 一覧 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div x-show="filteredPurchases.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        この月の仕入記録はまだありません
+      </div>
+      <div x-show="filteredPurchases.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">仕入日</th>
+              <th class="px-3 py-2 text-left">商品</th>
+              <th class="px-3 py-2 text-right">数量</th>
+              <th class="px-3 py-2 text-right">単価</th>
+              <th class="px-3 py-2 text-right">合計</th>
+              <th class="px-3 py-2 text-left">支払</th>
+              <th class="px-3 py-2 text-left">仕入先</th>
+              <th class="px-3 py-2 text-left">備考</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in filteredPurchases" :key="p.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="p.date"></td>
+                <td class="px-3 py-2" x-text="p.productName"></td>
+                <td class="px-3 py-2 text-right" x-text="p.quantity"></td>
+                <td class="px-3 py-2 text-right" x-text="'¥' + (p.unitCost||0).toLocaleString()"></td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + (p.totalCost||0).toLocaleString()"></td>
+                <td class="px-3 py-2" x-text="p.paymentMethod"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="p.supplier || '-'"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="p.note"></td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editPurchase(p)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deletePurchase(p)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ====== 経費(v0.4) ====== --><!-- ====== 経費(v0.4) ====== -->
   <section x-show="currentTab==='expenses'" class="space-y-4">
 
     <!-- 入力フォーム -->
