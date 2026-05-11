@@ -2170,6 +2170,7 @@ function app() {
       this.adForm = this.emptyAd();
       this.depositForm = this.emptyDeposit();
       this.purchaseForm = this.emptyPurchase();
+      this.ticketForm = this.emptyTicket();
       this.visitFilterMonth = this.currentMonthStr();
       this.salesFilterMonth = this.currentMonthStr();
       this.expenseFilterMonth = this.currentMonthStr();
@@ -4025,6 +4026,116 @@ function app() {
     // ===== 🆕 v0.7: 仕入記録機能(基本) =====
     // ============================================
 
+    // ============================================
+    // ===== 🆕 v0.8: 回数券ヘルパー関数 =====
+    // ============================================
+
+    emptyTicket() {
+      return {
+        id: null,
+        customerName: '',
+        ticketType: '',
+        applicableMenu: 'seitai',
+        purchaseDate: this.todayStr(),
+        totalCount: 0,
+        usedCount: 0,
+        remainingCount: 0,
+        unitPrice: 0,
+        remainingValue: 0,
+        purchasePrice: 0,
+        expiryDate: '',
+        lastUsedDate: null,
+        status: 'active',
+        isLegacy: false,
+        linkedVisitId: null,
+        note: ''
+      };
+    },
+
+    resetTicketForm() {
+      this.ticketForm = this.emptyTicket();
+      this.ticketMessage = '';
+    },
+
+    // 購入日からNヶ月後の期限を計算 → 'YYYY-MM-DD'
+    calcExpiryDate(purchaseDate, months) {
+      if (!purchaseDate) return '';
+      const d = new Date(purchaseDate);
+      if (isNaN(d.getTime())) return '';
+      d.setMonth(d.getMonth() + (Number(months) || 12));
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    },
+
+    // ハイブリッド延長: max(現在期限, 利用日+Nヶ月)
+    extendExpiryDate(currentExpiry, usedDate, months) {
+      const proposed = this.calcExpiryDate(usedDate, months);
+      if (!currentExpiry) return proposed;
+      if (!proposed) return currentExpiry;
+      return proposed > currentExpiry ? proposed : currentExpiry;
+    },
+
+    // 期限までの残日数(過ぎていればマイナス)
+    getDaysUntilExpiry(expiryDate) {
+      if (!expiryDate) return null;
+      const expiry = new Date(expiryDate);
+      const today = new Date(this.todayStr());
+      if (isNaN(expiry.getTime())) return null;
+      const diffMs = expiry.getTime() - today.getTime();
+      return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    },
+
+    // チケットのステータスを判定
+    // active = 残あり&期限内 / used_up = 残0 / expired = 期限切れ
+    getTicketStatus(ticket) {
+      if (!ticket) return 'active';
+      const remaining = Number(ticket.remainingCount) || 0;
+      if (remaining <= 0) return 'used_up';
+      const days = this.getDaysUntilExpiry(ticket.expiryDate);
+      if (days !== null && days < 0) return 'expired';
+      return 'active';
+    },
+
+    // メニュー名 → 適用区分('seitai' / 'maintenance' / null)
+    getMenuCategory(menuName) {
+      if (!menuName) return null;
+      if (menuName.includes('整体') || menuName.includes('インディバ')) return 'seitai';
+      if (menuName.includes('メンテナンス')) return 'maintenance';
+      return null;
+    },
+
+    // 券種名 → TICKET_TYPES のキー
+    detectTicketTypeFromMenu(menuName) {
+      if (!menuName) return null;
+      if (menuName.includes('回数券購入メンテナンス5回')) return 'メンテナンス5回券';
+      if (menuName.includes('回数券購入整体10回')) return '整体10回券';
+      if (menuName.includes('回数券購入整体20回')) return '整体20回券';
+      if (menuName.includes('回数券購入整体30回')) return '整体30回券';
+      return null;
+    },
+
+    // チケットの当該メニューでの使用可否判定
+    isTicketUsableForMenu(ticket, menuCategory) {
+      if (!ticket) return false;
+      if (ticket.status && ticket.status !== 'active') return false;
+      const am = ticket.applicableMenu;
+      if (am === 'all') return true;
+      if (am === menuCategory) return true;
+      return false;
+    },
+
+    // 顧客のアクティブチケットを取得(古い購入日順)
+    getActiveTicketsForCustomer(customerName) {
+      if (!customerName) return [];
+      return this.tickets
+        .filter(t => t.customerName === customerName)
+        .filter(t => this.getTicketStatus(t) === 'active')
+        .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || ''));
+    },
+
+    // ===== /v0.8 回数券ヘルパー関数 =====
     emptyPurchase() {
       return {
         id: null,
