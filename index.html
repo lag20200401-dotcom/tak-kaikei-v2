@@ -1631,6 +1631,25 @@
 
   </section>
 
+  <!-- ====== 🆕 v0.8: 回数券タブ(プレースホルダ - パッチ#8でUI実装) ====== -->
+  <section x-show="currentTab==='tickets'" class="space-y-4">
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-xl font-bold text-slate-800 mb-2">🎟️ 回数券残数管理</h2>
+      <p class="text-sm text-slate-500">準備中(v0.8 で実装中)</p>
+      <p class="text-sm text-slate-500 mt-1">顧客ごとの回数券残数・期限を一覧表示し、来院時の自動消化も連動します</p>
+      <div class="mt-4 bg-amber-50 border-l-4 border-amber-500 p-3 rounded text-sm text-amber-900">
+        <p class="font-bold">実装ロードマップ:</p>
+        <ul class="list-disc list-inside mt-1 text-xs space-y-0.5">
+          <li>パッチ#3〜#7: データ層・CRUD・自動連携</li>
+          <li>パッチ#8: 一覧UI・アラート帯・フィルタ</li>
+          <li>パッチ#9: Legacy 一括インポート(45名分)</li>
+          <li>パッチ#10: visits フォームに残回数表示</li>
+          <li>パッチ#11: ステータス自動更新</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
   <section x-show="currentTab==='export'" class="space-y-4">
 
@@ -1944,6 +1963,7 @@ function app() {
       { id: 'expenses',  label: '経費',           placeholder: false },
       { id: 'ads',       label: '広告費',         placeholder: false },
       { id: 'cashbook',  label: '現金出納帳',     placeholder: false },
+      { id: 'tickets',   label: '🎟️ 回数券',     placeholder: false },
       { id: 'export',    label: '月末出力',       placeholder: false },
     ],
 
