@@ -55,7 +55,7 @@
       <span class="font-bold text-slate-800">整体院TAK</span>
       <span class="text-slate-400 mx-2">/</span>
       <span class="text-sm text-slate-600">経営管理 v2</span>
-      <span class="text-xs text-teal-600 ml-2 font-medium">v0.7</span>
+      <span class="text-xs text-teal-600 ml-2 font-medium">v0.8.0</span>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs px-2 py-1 rounded"
@@ -1951,16 +1951,22 @@ function app() {
     staffList: ['TAK', '日向'],
     paymentMethods: ['現金', 'ライフ', 'サブスク', 'PayPay', '回数券消化'],
 
-    // 🆕 v0.6.5: 来院記録メニュープリセット
+    // 🆕 v0.8: 来院記録メニュープリセット(施術4 + 消化3 + 購入4 = 11項目)
     MENU_PRESETS: [
-      { name: '整体60分',        amount: 11000,  paymentMethod: '現金'       },
-      { name: 'メンテナンス',    amount: 5980,   paymentMethod: '現金'       },
-      { name: 'サブスク',        amount: 8800,   paymentMethod: 'サブスク'   },
-      { name: '回数券消化',      amount: 0,      paymentMethod: '回数券消化' },
-      { name: 'インディバ60分',  amount: 11000,  paymentMethod: '現金'       },
-      { name: '回数券購入10回',  amount: 104500, paymentMethod: '現金'       },
-      { name: '回数券購入20回',  amount: 198000, paymentMethod: '現金'       },
-      { name: '回数券購入30回',  amount: 280500, paymentMethod: '現金'       },
+      // ── 施術系 ──
+      { name: '整体60分',                       amount: 11000,  paymentMethod: '現金'       },
+      { name: 'メンテナンス',                   amount: 5980,   paymentMethod: '現金'       },
+      { name: 'サブスク',                       amount: 8800,   paymentMethod: 'サブスク'   },
+      { name: 'インディバ60分',                 amount: 11000,  paymentMethod: '現金'       },
+      // ── 回数券消化(細分化) ──
+      { name: '回数券消化(整体)',             amount: 0,      paymentMethod: '回数券消化' },
+      { name: '回数券消化(メンテナンス)',     amount: 0,      paymentMethod: '回数券消化' },
+      { name: '回数券消化(インディバ)',       amount: 0,      paymentMethod: '回数券消化' },
+      // ── 回数券購入 ──
+      { name: '回数券購入メンテナンス5回',      amount: 44000,  paymentMethod: '現金'       },
+      { name: '回数券購入整体10回',             amount: 104500, paymentMethod: '現金'       },
+      { name: '回数券購入整体20回',             amount: 198000, paymentMethod: '現金'       },
+      { name: '回数券購入整体30回',             amount: 280500, paymentMethod: '現金'       },
     ],
     // 経費・広告費用(v0.4)
     expensePaymentMethods: ['現金', 'カード', '銀行振込', 'PayPay', 'その他'],
