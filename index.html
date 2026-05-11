@@ -1785,6 +1785,7 @@ function app() {
     ads: [],
     cashDeposits: [],   // 🆕 v0.5
     monthlyExports: [], // 🆕 v0.5
+    purchases: [],      // 🆕 v0.7 仕入記録
 
     // ===== 来院フォーム =====
     visitForm: { id: null, date: '', customerName: '', customerId: null, menu: '', amount: 0, staff: 'TAK', paymentMethod: '現金', note: '' },
@@ -1865,6 +1866,24 @@ function app() {
     },
     depositMessage: '',
     depositMessageType: 'ok',
+
+    // ===== 🆕 v0.7: 仕入フォーム =====
+    purchaseForm: {
+      id: null,
+      date: '',
+      productId: '',
+      productName: '',
+      quantity: 1,
+      unitCost: 0,
+      totalCost: 0,
+      paymentMethod: 'カード',
+      supplier: '',
+      note: '',
+      linkedExpenseId: null
+    },
+    purchaseMessage: '',
+    purchaseMessageType: 'ok',
+    purchaseFilterMonth: '',
 
     // ===== 🆕 v0.5: 月末Excel出力 =====
     exportMonth: '',
