@@ -1124,18 +1124,26 @@
           <tbody>
             <template x-for="e in filteredExpenses" :key="e.id">
               <tr class="border-t border-slate-100 hover:bg-slate-50"
-                  :class="e.isAutoSample ? 'bg-orange-50' : ''">
+                  :class="e.linkedPurchaseId ? 'bg-blue-50' : (e.isAutoSample ? 'bg-orange-50' : '')">
                 <td class="px-3 py-2 whitespace-nowrap" x-text="e.date"></td>
                 <td class="px-3 py-2">
                   <span x-text="e.category"></span>
                   <span x-show="e.isAutoSample" class="ml-1 text-xs bg-orange-200 text-orange-800 px-1 rounded">自動転記</span>
+                  <span x-show="e.linkedPurchaseId" class="ml-1 text-xs bg-blue-200 text-blue-800 px-1 rounded">🔒 仕入連携</span>
                 </td>
                 <td class="px-3 py-2 text-right font-bold" x-text="'¥' + (e.amount||0).toLocaleString()"></td>
                 <td class="px-3 py-2" x-text="e.paymentMethod"></td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="e.note"></td>
                 <td class="px-3 py-2 text-right whitespace-nowrap">
-                  <button @click="editExpense(e)" class="text-xs text-teal-700 hover:underline">編集</button>
-                  <button @click="deleteExpense(e)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                  <template x-if="!e.linkedPurchaseId">
+                    <span>
+                      <button @click="editExpense(e)" class="text-xs text-teal-700 hover:underline">編集</button>
+                      <button @click="deleteExpense(e)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                    </span>
+                  </template>
+                  <template x-if="e.linkedPurchaseId">
+                    <span class="text-xs text-slate-400">📦 仕入タブから操作</span>
+                  </template>
                 </td>
               </tr>
             </template>
