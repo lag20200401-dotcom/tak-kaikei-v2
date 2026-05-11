@@ -55,7 +55,7 @@
       <span class="font-bold text-slate-800">整体院TAK</span>
       <span class="text-slate-400 mx-2">/</span>
       <span class="text-sm text-slate-600">経営管理 v2</span>
-      <span class="text-xs text-teal-600 ml-2 font-medium">v0.8.0</span>
+      <span class="text-xs text-teal-600 ml-2 font-medium">v0.8.1</span>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs px-2 py-1 rounded"
@@ -2459,13 +2459,24 @@ function app() {
 
     async saveVisit() {
       if (!this.canSaveVisit()) return;
-      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      const { db, collection, doc, getDoc, setDoc, serverTimestamp } = window._fb;
       this.saving = true;
       this.visitMessage = '';
 
       try {
         const v = this.visitForm;
         const cat = this.autoCategory();
+
+        // 🆕 v0.8.1: 編集時は旧visitsデータを取得(後でロールバックに使う)
+        let oldVisit = null;
+        if (v.id) {
+          try {
+            const oldSnap = await getDoc(doc(db, 'visits', v.id));
+            if (oldSnap.exists()) oldVisit = { id: oldSnap.id, ...oldSnap.data() };
+          } catch (e) {
+            console.warn('旧visits取得失敗:', e);
+          }
+        }
 
         let customerId = v.customerId;
         if (!customerId) {
@@ -2509,10 +2520,26 @@ function app() {
 
         await setDoc(ref, data, { merge: true });
 
-        this.visitMessage = v.id ? '更新しました' : '保存しました';
-        this.visitMessageType = 'ok';
+        // 🆕 v0.8.1: 回数券自動連携
+        let warning = '';
+        try {
+          // ① 編集時: 旧連携をロールバック
+          if (oldVisit) {
+            await this.rollbackTicketLink(oldVisit);
+          }
+          // ② 新連携を適用(保存後のデータで)
+          const savedVisit = { id: ref.id, ...data };
+          const result = await this.applyTicketLink(savedVisit, ref.id);
+          if (result.warning) warning = result.warning;
+        } catch (e) {
+          console.error('回数券連携エラー:', e);
+          warning = '回数券連携でエラー: ' + e.message;
+        }
+
+        this.visitMessage = (v.id ? '更新しました' : '保存しました') + (warning ? ' / ' + warning : '');
+        this.visitMessageType = warning ? 'err' : 'ok';
         this.resetVisitForm();
-        setTimeout(() => this.visitMessage = '', 2500);
+        setTimeout(() => this.visitMessage = '', warning ? 6000 : 2500);
       } catch (e) {
         console.error(e);
         this.visitMessage = 'エラー: ' + e.message;
@@ -2531,6 +2558,12 @@ function app() {
       if (!confirm(`${v.date} ${v.customerName} の記録を削除しますか?`)) return;
       const { db, doc, deleteDoc } = window._fb;
       try {
+        // 🆕 v0.8.1: 削除前に回数券連携をロールバック
+        try {
+          await this.rollbackTicketLink(v);
+        } catch (e) {
+          console.error('回数券ロールバックエラー(削除続行):', e);
+        }
         await deleteDoc(doc(db, 'visits', v.id));
       } catch (e) {
         alert('削除エラー: ' + e.message);
@@ -4256,6 +4289,178 @@ function app() {
     },
 
     // ===== /v0.8 回数券ヘルパー関数 =====
+    // ============================================
+    // ===== 🆕 v0.8.1 パッチ#3-#7: 回数券自動連携 =====
+    // ============================================
+
+    // visit の paymentMethod とメニュー名から連携アクションを判定
+    // 戻り値: 'purchase' | 'consume' | 'none'
+    detectVisitTicketAction(visit) {
+      if (!visit) return 'none';
+      const pm = visit.paymentMethod || '';
+      const menu = visit.menu || '';
+
+      // 消化判定: paymentMethod が明示的に「回数券消化」
+      if (pm === '回数券消化') return 'consume';
+
+      // 購入判定: メニュー名に「回数券購入」が含まれ、かつ TICKET_TYPES で識別可能
+      if (menu.includes('回数券購入') && this.detectTicketTypeFromMenu(menu)) {
+        return 'purchase';
+      }
+      return 'none';
+    },
+
+    // 旧visits の連携をロールバック
+    // - purchase だった場合: 紐付く ticket を削除
+    // - consume だった場合: 紐付く ticket の usedCount を1減らす(残数+1、status復活)
+    async rollbackTicketLink(oldVisit) {
+      const action = this.detectVisitTicketAction(oldVisit);
+      if (action === 'none') return;
+
+      const { db, doc, setDoc, deleteDoc, serverTimestamp } = window._fb;
+
+      // 紐付く ticket を探す(linkedVisitId で検索)
+      // ※ メモリ上の this.tickets を信頼(onSnapshotで最新化されている)
+      const linkedTickets = this.tickets.filter(t => t.linkedVisitId === oldVisit.id);
+
+      if (action === 'purchase') {
+        // 購入のロールバック: 作成した券を削除
+        for (const t of linkedTickets) {
+          try {
+            await deleteDoc(doc(db, 'tickets', t.id));
+            console.log('✓ 回数券削除(購入ロールバック):', t.ticketType);
+          } catch (e) {
+            console.error('券削除失敗:', e);
+          }
+        }
+      } else if (action === 'consume') {
+        // 消化のロールバック: usedCount -1 / remainingCount +1
+        // ※ 通常は1枚だけ紐付いている想定
+        for (const t of linkedTickets) {
+          try {
+            const newUsed = Math.max(0, (Number(t.usedCount) || 0) - 1);
+            const total = Number(t.totalCount) || 0;
+            const newRemaining = total - newUsed;
+            const unitPrice = Number(t.unitPrice) || 0;
+            // 期限切れでなければ active に復活
+            const days = this.getDaysUntilExpiry(t.expiryDate);
+            const newStatus = (days !== null && days < 0) ? 'expired'
+                            : newRemaining <= 0 ? 'used_up' : 'active';
+            await setDoc(doc(db, 'tickets', t.id), {
+              usedCount: newUsed,
+              remainingCount: newRemaining,
+              remainingValue: newRemaining * unitPrice,
+              status: newStatus,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+            console.log('✓ 回数券残数復元(消化ロールバック):', t.ticketType, '残', newRemaining);
+          } catch (e) {
+            console.error('券残数復元失敗:', e);
+          }
+        }
+      }
+    },
+
+    // 新visits の連携を適用
+    // 戻り値: { ok: boolean, warning: string }
+    async applyTicketLink(visit, visitId) {
+      const action = this.detectVisitTicketAction(visit);
+      if (action === 'none') return { ok: true, warning: '' };
+
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+
+      if (action === 'purchase') {
+        // 券種をメニュー名から判定
+        const typeKey = this.detectTicketTypeFromMenu(visit.menu);
+        if (!typeKey) {
+          return { ok: false, warning: '⚠️ 券種を自動判定できませんでした。回数券タブで手動追加してください' };
+        }
+        const tpl = this.TICKET_TYPES[typeKey];
+        if (!tpl) {
+          return { ok: false, warning: '⚠️ 券種テンプレートが見つかりません: ' + typeKey };
+        }
+
+        try {
+          const newRef = doc(collection(db, 'tickets'));
+          const expiryDate = this.calcExpiryDate(visit.date, tpl.expiryMonths);
+          await setDoc(newRef, {
+            customerName: visit.customerName,
+            ticketType: typeKey,
+            applicableMenu: tpl.applicableMenu,
+            purchaseDate: visit.date,
+            totalCount: tpl.count,
+            usedCount: 0,
+            remainingCount: tpl.count,
+            unitPrice: tpl.unitPrice,
+            remainingValue: tpl.count * tpl.unitPrice,
+            purchasePrice: tpl.price,
+            expiryDate: expiryDate,
+            lastUsedDate: null,
+            status: 'active',
+            isLegacy: false,
+            linkedVisitId: visitId,
+            note: '',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+          console.log('✓ 回数券作成(購入連携):', typeKey, visit.customerName);
+          return { ok: true, warning: '' };
+        } catch (e) {
+          console.error('券作成失敗:', e);
+          return { ok: false, warning: '⚠️ 券作成エラー: ' + e.message };
+        }
+      }
+
+      if (action === 'consume') {
+        // メニュー名から適用区分を判定
+        const menuCat = this.getMenuCategory(visit.menu);
+        if (!menuCat) {
+          return { ok: false, warning: '⚠️ メニューから適用区分を判定できませんでした(整体/メンテナンスのいずれか必須)' };
+        }
+
+        // 顧客のアクティブ券を古い順に取得し、適用可能な最初の券を選ぶ
+        const actives = this.getActiveTicketsForCustomer(visit.customerName);
+        const usable = actives.find(t => this.isTicketUsableForMenu(t, menuCat));
+
+        if (!usable) {
+          return {
+            ok: false,
+            warning: `⚠️ ${visit.customerName}の適用可能な回数券(${menuCat})が見つかりません。回数券タブで手動追加してください`
+          };
+        }
+
+        try {
+          const newUsed = (Number(usable.usedCount) || 0) + 1;
+          const total = Number(usable.totalCount) || 0;
+          const newRemaining = Math.max(0, total - newUsed);
+          const unitPrice = Number(usable.unitPrice) || 0;
+          // ハイブリッド期限延長: max(現在期限, 利用日+12ヶ月)
+          const newExpiry = this.extendExpiryDate(usable.expiryDate, visit.date, 12);
+          const newStatus = newRemaining <= 0 ? 'used_up' : 'active';
+
+          await setDoc(doc(db, 'tickets', usable.id), {
+            usedCount: newUsed,
+            remainingCount: newRemaining,
+            remainingValue: newRemaining * unitPrice,
+            expiryDate: newExpiry,
+            lastUsedDate: visit.date,
+            status: newStatus,
+            linkedVisitId: visitId,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          console.log('✓ 回数券消化:', usable.ticketType, visit.customerName, '残', newRemaining);
+          return { ok: true, warning: '' };
+        } catch (e) {
+          console.error('券消化失敗:', e);
+          return { ok: false, warning: '⚠️ 券消化エラー: ' + e.message };
+        }
+      }
+
+      return { ok: true, warning: '' };
+    },
+
+    // ===== /v0.8.1 パッチ#3-#7 =====
     // ===== /v0.8 回数券ヘルパー関数 =====
     emptyPurchase() {
       return {
