@@ -4189,12 +4189,7 @@ function app() {
         log(`  ✓ 経費: ${data.expenses.length}件`);
         log(`  ✓ 広告費: ${data.ads.length}件`);
         log(`  ✓ 銀行預入: ${data.cashDeposits.length}件`);
-        const purchases = this.purchases.filter(p => (p.date || '').startsWith(ym));
-      // 前月以前の仕入(累計在庫計算用)
-      const prevPurchases = this.purchases.filter(p => {
-        const d = p.date || '';
-        return d && d < `${ym}-01`;
-      });
+        
 
         log('📊 現金出納帳を生成中...');
         const cashbookWb = this.buildCashbookWorkbook(ym, data);
@@ -4242,6 +4237,12 @@ function app() {
       const expenses = this.expenses.filter(e => (e.date || '').startsWith(ym));
       const ads = this.ads.filter(a => (a.date || '').startsWith(ym));
       const cashDeposits = this.cashDeposits.filter(d => (d.date || '').startsWith(ym));
+      const purchases = this.purchases.filter(p => (p.date || '').startsWith(ym));
+      // 前月以前の仕入(累計在庫計算用)
+      const prevPurchases = this.purchases.filter(p => {
+        const d = p.date || '';
+        return d && d < `${ym}-01`;
+      });
 
       // 月初繰越を計算(画面の cashbookCarry とは別ロジック - 対象月の値を使用)
       // ここでは現状の cashbookMonth が ym と異なる可能性があるので、再計算する必要あり
