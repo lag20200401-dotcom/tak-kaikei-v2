@@ -2273,6 +2273,12 @@ function app() {
         this.purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error('purchases購読エラー:', err); this.cloudStatus = '接続エラー'; });
       this.unsubscribers.push(u8);
+
+      // 🆕 v0.8: 回数券の購読(購入日昇順 = 古い券から先に消化するため)
+      const u9 = onSnapshot(query(collection(db, 'tickets'), orderBy('purchaseDate', 'asc')), snap => {
+        this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('tickets購読エラー:', err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u9);
     },
 
     // 🆕 v0.6.4: 全リスナー停止
@@ -4135,6 +4141,121 @@ function app() {
         .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || ''));
     },
 
+    // === チケット保存(手動) ===
+    canSaveTicket() {
+      const t = this.ticketForm;
+      return t.customerName && t.ticketType && t.purchaseDate
+          && Number(t.totalCount) > 0 && t.expiryDate;
+    },
+
+    async saveTicket() {
+      if (!this.canSaveTicket()) {
+        this.ticketMessage = '必須項目が未入力です';
+        this.ticketMessageType = 'err';
+        return;
+      }
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.ticketMessage = '';
+
+      try {
+        const t = this.ticketForm;
+        const total = Number(t.totalCount) || 0;
+        const used = Number(t.usedCount) || 0;
+        const remaining = total - used;
+        const unitPrice = Number(t.unitPrice) || 0;
+        const remainingValue = remaining * unitPrice;
+
+        const ref = t.id
+          ? doc(db, 'tickets', t.id)
+          : doc(collection(db, 'tickets'));
+
+        const data = {
+          customerName: (t.customerName || '').trim(),
+          ticketType: t.ticketType,
+          applicableMenu: t.applicableMenu || 'seitai',
+          purchaseDate: t.purchaseDate,
+          totalCount: total,
+          usedCount: used,
+          remainingCount: remaining,
+          unitPrice: unitPrice,
+          remainingValue: remainingValue,
+          purchasePrice: Number(t.purchasePrice) || 0,
+          expiryDate: t.expiryDate,
+          lastUsedDate: t.lastUsedDate || null,
+          status: remaining <= 0 ? 'used_up' : 'active',
+          isLegacy: !!t.isLegacy,
+          linkedVisitId: t.linkedVisitId || null,
+          note: t.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (!t.id) data.createdAt = serverTimestamp();
+
+        await setDoc(ref, data, { merge: true });
+
+        this.ticketMessage = t.id ? '更新しました' : '保存しました';
+        this.ticketMessageType = 'ok';
+        this.resetTicketForm();
+        setTimeout(() => this.ticketMessage = '', 2500);
+      } catch (err) {
+        console.error(err);
+        this.ticketMessage = 'エラー: ' + err.message;
+        this.ticketMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    editTicket(t) {
+      this.ticketForm = {
+        id: t.id,
+        customerName: t.customerName || '',
+        ticketType: t.ticketType || '',
+        applicableMenu: t.applicableMenu || 'seitai',
+        purchaseDate: t.purchaseDate || this.todayStr(),
+        totalCount: Number(t.totalCount) || 0,
+        usedCount: Number(t.usedCount) || 0,
+        remainingCount: Number(t.remainingCount) || 0,
+        unitPrice: Number(t.unitPrice) || 0,
+        remainingValue: Number(t.remainingValue) || 0,
+        purchasePrice: Number(t.purchasePrice) || 0,
+        expiryDate: t.expiryDate || '',
+        lastUsedDate: t.lastUsedDate || null,
+        status: t.status || 'active',
+        isLegacy: !!t.isLegacy,
+        linkedVisitId: t.linkedVisitId || null,
+        note: t.note || ''
+      };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    async deleteTicket(t) {
+      const label = `${t.customerName} / ${t.ticketType} / 残${t.remainingCount}回`;
+      if (!confirm(`回数券を削除しますか?\n\n${label}\n\nこの操作は取り消せません。`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'tickets', t.id));
+      } catch (err) {
+        alert('削除エラー: ' + err.message);
+      }
+    },
+
+    // 券種選択時にデフォルト値を自動投入(手動フォーム用)
+    onTicketTypeSelected() {
+      const t = this.ticketForm;
+      const tpl = this.TICKET_TYPES[t.ticketType];
+      if (!tpl) return;
+      t.totalCount = tpl.count;
+      t.usedCount = 0;
+      t.remainingCount = tpl.count;
+      t.unitPrice = tpl.unitPrice;
+      t.remainingValue = tpl.count * tpl.unitPrice;
+      t.purchasePrice = tpl.price;
+      t.applicableMenu = tpl.applicableMenu;
+      t.expiryDate = this.calcExpiryDate(t.purchaseDate || this.todayStr(), tpl.expiryMonths);
+    },
+
+    // ===== /v0.8 回数券ヘルパー関数 =====
     // ===== /v0.8 回数券ヘルパー関数 =====
     emptyPurchase() {
       return {
