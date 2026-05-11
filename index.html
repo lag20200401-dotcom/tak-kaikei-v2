@@ -2005,6 +2005,27 @@ function app() {
     cashDeposits: [],   // 🆕 v0.5
     monthlyExports: [], // 🆕 v0.5
     purchases: [],      // 🆕 v0.7 仕入記録
+    tickets: [],        // 🆕 v0.8 回数券データ
+
+    // 🆕 v0.8: 回数券種別マスター(購入時のテンプレ)
+    TICKET_TYPES: {
+      'メンテナンス5回券': {
+        count: 5, price: 44000, unitPrice: 8800,
+        applicableMenu: 'maintenance', expiryMonths: 12
+      },
+      '整体10回券': {
+        count: 10, price: 104500, unitPrice: 10450,
+        applicableMenu: 'seitai', expiryMonths: 12
+      },
+      '整体20回券': {
+        count: 20, price: 198000, unitPrice: 9900,
+        applicableMenu: 'seitai', expiryMonths: 12
+      },
+      '整体30回券': {
+        count: 30, price: 280500, unitPrice: 9350,
+        applicableMenu: 'seitai', expiryMonths: 12
+      }
+    },
 
     // ===== 来院フォーム =====
     visitForm: { id: null, date: '', customerName: '', customerId: null, menu: '', amount: 0, staff: 'TAK', paymentMethod: '現金', note: '' },
@@ -2085,6 +2106,37 @@ function app() {
     },
     depositMessage: '',
     depositMessageType: 'ok',
+
+    // ===== 🆕 v0.8: 回数券フォーム・フィルタ =====
+    ticketForm: {
+      id: null,
+      customerName: '',
+      ticketType: '',           // 'メンテナンス5回券' / '整体10回券' / '整体20回券' / '整体30回券' / '繰越券'
+      applicableMenu: 'seitai', // 'all' / 'maintenance' / 'seitai'
+      purchaseDate: '',
+      totalCount: 0,
+      usedCount: 0,
+      remainingCount: 0,
+      unitPrice: 0,
+      remainingValue: 0,
+      purchasePrice: 0,
+      expiryDate: '',
+      lastUsedDate: null,
+      status: 'active',         // 'active' / 'used_up' / 'expired'
+      isLegacy: false,
+      linkedVisitId: null,
+      note: ''
+    },
+    ticketMessage: '',
+    ticketMessageType: 'ok',
+    ticketFilter: 'active',     // 'all' / 'active' / 'expiring' / 'expired' / 'used_up' / 'legacy'
+
+    // ===== 🆕 v0.8: Legacy一括インポート用 =====
+    legacyImportText: '',
+    legacyImportPreview: [],
+    legacyImportError: '',
+    legacyImporting: false,
+    legacyImportProgress: '',
 
     // ===== 🆕 v0.7: 仕入フォーム =====
     purchaseForm: {
