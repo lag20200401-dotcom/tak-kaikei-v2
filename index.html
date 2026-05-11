@@ -3752,6 +3752,76 @@ function app() {
         alert('削除エラー: ' + err.message);
       }
     },
+    // ============================================
+    // ===== 🆕 v0.7: 仕入記録機能(基本) =====
+    // ============================================
+
+    emptyPurchase() {
+      return {
+        id: null,
+        date: this.todayStr(),
+        productId: '',
+        productName: '',
+        quantity: 1,
+        unitCost: 0,
+        totalCost: 0,
+        paymentMethod: 'カード',
+        supplier: '',
+        note: '',
+        linkedExpenseId: null
+      };
+    },
+
+    resetPurchaseForm() {
+      this.purchaseForm = this.emptyPurchase();
+      this.purchaseMessage = '';
+    },
+
+    canSavePurchase() {
+      const p = this.purchaseForm;
+      return p.date && p.productName && p.quantity > 0 && p.unitCost >= 0 && p.paymentMethod;
+    },
+
+    get filteredPurchases() {
+      if (!this.purchaseFilterMonth) return this.purchases;
+      return this.purchases.filter(p => (p.date || '').startsWith(this.purchaseFilterMonth));
+    },
+
+    purchaseTotalAmount() {
+      return this.filteredPurchases.reduce((sum, p) => sum + (Number(p.totalCost) || 0), 0);
+    },
+
+    get purchaseByProduct() {
+      const map = {};
+      for (const p of this.filteredPurchases) {
+        const key = p.productName || '(商品名なし)';
+        if (!map[key]) {
+          map[key] = { productName: key, totalQty: 0, totalCost: 0 };
+        }
+        map[key].totalQty += Number(p.quantity) || 0;
+        map[key].totalCost += Number(p.totalCost) || 0;
+      }
+      return Object.values(map).sort((a, b) => b.totalCost - a.totalCost);
+    },
+
+    onPurchaseProductSelect() {
+      const p = this.products.find(x => x.id === this.purchaseForm.productId);
+      if (p) {
+        this.purchaseForm.productName = p.name;
+        if (!this.purchaseForm.unitCost || this.purchaseForm.unitCost === 0) {
+          this.purchaseForm.unitCost = Number(p.dealerPrice) || 0;
+        }
+        this.recalcPurchaseTotal();
+      } else {
+        this.purchaseForm.productName = '';
+      }
+    },
+
+    recalcPurchaseTotal() {
+      const qty = Number(this.purchaseForm.quantity) || 0;
+      const cost = Number(this.purchaseForm.unitCost) || 0;
+      this.purchaseForm.totalCost = qty * cost;
+    },
 
     // ============================================
     // ===== 🆕 v0.5: 月末Excel出力機能 =====
