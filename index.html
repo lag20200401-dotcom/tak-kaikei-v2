@@ -1900,10 +1900,12 @@ function app() {
       this.expenseForm = this.emptyExpense();
       this.adForm = this.emptyAd();
       this.depositForm = this.emptyDeposit();
+      this.purchaseForm = this.emptyPurchase();
       this.visitFilterMonth = this.currentMonthStr();
       this.salesFilterMonth = this.currentMonthStr();
       this.expenseFilterMonth = this.currentMonthStr();
       this.adFilterMonth = this.currentMonthStr();
+      this.purchaseFilterMonth = this.currentMonthStr();
       this.cashbookMonth = this.currentMonthStr();
       this.exportMonth = this.prevMonth(this.currentMonthStr());  // デフォルト前月
       window.addEventListener('firebase-ready', () => {
