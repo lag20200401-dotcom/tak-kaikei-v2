@@ -3999,12 +3999,13 @@ function app() {
       const p = this.products.find(x => x.id === this.purchaseForm.productId);
       if (p) {
         this.purchaseForm.productName = p.name;
-        if (!this.purchaseForm.unitCost || this.purchaseForm.unitCost === 0) {
-          this.purchaseForm.unitCost = Number(p.dealerPrice) || 0;
-        }
+        // 🆕 商品切替時は必ず代理店価格で上書き(前商品の値が残らないようにする)
+        this.purchaseForm.unitCost = Number(p.dealerPrice) || 0;
         this.recalcPurchaseTotal();
       } else {
         this.purchaseForm.productName = '';
+        this.purchaseForm.unitCost = 0;
+        this.purchaseForm.totalCost = 0;
       }
     },
 
