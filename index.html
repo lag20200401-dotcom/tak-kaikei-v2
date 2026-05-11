@@ -1998,6 +1998,11 @@ function app() {
         });
       }, err => { console.error(err); });
       this.unsubscribers.push(u7);
+      // 🆕 v0.7: 仕入記録の購読
+      const u8 = onSnapshot(query(collection(db, 'purchases'), orderBy('date', 'desc')), snap => {
+        this.purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('purchases購読エラー:', err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u8);
     },
 
     // 🆕 v0.6.4: 全リスナー停止
