@@ -3077,14 +3077,14 @@ function app() {
         alert('「DELETE」と正確に入力してください');
         return;
       }
-      if (!this.testDataFound || this.testDataFound.length === 0) {
+      if (!this.testDataFound || this.testDataFound?.length === 0) {
         alert('削除対象がありません');
         return;
       }
       
       // 最終確認(三段階目)
-      const targets = this.testDataFound.map(d => `${d.customerNo} ${d.name}`).join('\n');
-      if (!confirm(`以下の ${this.testDataFound.length} 件を本当に削除しますか?\n\n${targets}\n\nこの操作は取り消せません。`)) {
+      const targets = this.testDataFound?.map(d => `${d.customerNo} ${d.name}`).join('\n');
+      if (!confirm(`以下の ${this.testDataFound?.length} 件を本当に削除しますか?\n\n${targets}\n\nこの操作は取り消せません。`)) {
         return;
       }
       
