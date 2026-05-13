@@ -1974,7 +1974,146 @@
     </div>
   </div>
 </div>
+<!-- ===== 🆕 v0.8.2: 回数券 手動追加/編集モーダル ===== -->
+<div x-show="ticketModalOpen" x-cloak
+     class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-40">
+  <div @click.outside="ticketModalOpen = false"
+       class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+    <h3 class="text-lg font-bold text-slate-800 mb-4"
+        x-text="ticketForm.id ? '回数券を編集' : '回数券を追加'"></h3>
 
+    <!-- 編集時の注意 -->
+    <div x-show="ticketForm.id && ticketForm.linkedVisitId"
+         class="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 mb-3">
+      ⚠️ この券は来院記録と連携しています。残数・期限を直接書き換えると、来院記録の自動連携と不整合になる可能性があります。
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+
+      <!-- 顧客名 -->
+      <div class="md:col-span-7">
+        <label class="block text-xs text-slate-600 mb-1">顧客名 *</label>
+        <input type="text" x-model="ticketForm.customerName"
+          placeholder="例: 山田太郎"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- Legacy フラグ -->
+      <div class="md:col-span-5 flex items-end">
+        <label class="flex items-center gap-2 text-sm text-slate-700 px-3 py-2">
+          <input type="checkbox" x-model="ticketForm.isLegacy">
+          <span>Legacy(過去券・繰越券)</span>
+        </label>
+      </div>
+
+      <!-- 券種 -->
+      <div class="md:col-span-6">
+        <label class="block text-xs text-slate-600 mb-1">券種 *</label>
+        <select x-model="ticketForm.ticketType" @change="onTicketTypeSelected()"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+          <option value="">-- 券種を選択 --</option>
+          <template x-for="key in Object.keys(TICKET_TYPES)" :key="key">
+            <option :value="key" x-text="key"></option>
+          </template>
+          <option value="繰越券">繰越券(カスタム)</option>
+        </select>
+      </div>
+
+      <!-- 適用区分 -->
+      <div class="md:col-span-6">
+        <label class="block text-xs text-slate-600 mb-1">適用区分 *</label>
+        <select x-model="ticketForm.applicableMenu"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+          <option value="seitai">整体(整体・インディバ)</option>
+          <option value="maintenance">メンテナンス</option>
+          <option value="all">全メニュー</option>
+        </select>
+      </div>
+
+      <!-- 購入日 -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">購入日 *</label>
+        <input type="date" x-model="ticketForm.purchaseDate"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 期限 -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">期限 *</label>
+        <input type="date" x-model="ticketForm.expiryDate"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 最終利用日 -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">最終利用日</label>
+        <input type="date" x-model="ticketForm.lastUsedDate"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 総回数 -->
+      <div class="md:col-span-3">
+        <label class="block text-xs text-slate-600 mb-1">総回数 *</label>
+        <input type="number" x-model.number="ticketForm.totalCount" min="1"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 使用済 -->
+      <div class="md:col-span-3">
+        <label class="block text-xs text-slate-600 mb-1">使用済 *</label>
+        <input type="number" x-model.number="ticketForm.usedCount" min="0"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 単価 -->
+      <div class="md:col-span-3">
+        <label class="block text-xs text-slate-600 mb-1">単価(円)</label>
+        <input type="number" x-model.number="ticketForm.unitPrice"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 購入額 -->
+      <div class="md:col-span-3">
+        <label class="block text-xs text-slate-600 mb-1">購入額(円)</label>
+        <input type="number" x-model.number="ticketForm.purchasePrice"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 備考 -->
+      <div class="md:col-span-12">
+        <label class="block text-xs text-slate-600 mb-1">備考</label>
+        <input type="text" x-model="ticketForm.note" placeholder="任意"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 残数プレビュー -->
+      <div class="md:col-span-12 bg-slate-50 rounded p-3 text-sm">
+        残数(自動計算):
+        <span class="font-bold text-emerald-700"
+              x-text="((ticketForm.totalCount || 0) - (ticketForm.usedCount || 0)) + '回'"></span>
+        / 残金額:
+        <span class="font-bold"
+              x-text="'¥' + (((ticketForm.totalCount || 0) - (ticketForm.usedCount || 0)) * (ticketForm.unitPrice || 0)).toLocaleString()"></span>
+      </div>
+    </div>
+
+    <!-- メッセージ -->
+    <div x-show="ticketMessage" class="mt-3 text-sm"
+         :class="ticketMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+         x-text="ticketMessage"></div>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button @click="ticketModalOpen = false"
+        class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">キャンセル</button>
+      <button @click="saveTicket().then(() => { if (ticketMessageType==='ok') ticketModalOpen = false })"
+        :disabled="!canSaveTicket() || saving"
+        class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded-lg">
+        <span x-show="!saving" x-text="ticketForm.id ? '更新' : '追加'"></span>
+        <span x-show="saving">保存中...</span>
+      </button>
+    </div>
+  </div>
+</div>
 <!-- ===== 物販 一括投入モーダル ===== -->
 <div x-show="salesBulkModalOpen" x-cloak
      class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-40">
