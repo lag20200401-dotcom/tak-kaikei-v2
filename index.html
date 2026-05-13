@@ -13,7 +13,7 @@
   [x-cloak] { display: none !important; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; }
   .tab-active { background:#0f766e; color:white; }
-  .tab-inactive { background:#f1f5f9; color:#334155; }
+  .tab-inactive { background:#f1f5f9; color:#33ticketModalOpen: false,4155; }
   .tab-inactive:hover { background:#e2e8f0; }
   /* オートコンプリート候補リスト */
   .suggest-list {
@@ -55,7 +55,7 @@
       <span class="font-bold text-slate-800">整体院TAK</span>
       <span class="text-slate-400 mx-2">/</span>
       <span class="text-sm text-slate-600">経営管理 v2</span>
-      <span class="text-xs text-teal-600 ml-2 font-medium">v0.8.1</span>
+      <span class="text-xs text-teal-600 ml-2 font-medium">v0.8.3</span>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs px-2 py-1 rounded"
@@ -1979,9 +1979,20 @@
      class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-40">
   <div @click.outside="ticketModalOpen = false"
        class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-    <h3 class="text-lg font-bold text-slate-800 mb-4"
-        x-text="ticketForm.id ? '回数券を編集' : '回数券を追加'"></h3>
-
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h3 class="text-lg font-bold text-slate-800"
+          x-text="ticketForm.id ? '回数券を編集' : '回数券を追加'"></h3>
+      <!-- 🆕 v0.8.3: 連続入力モード -->
+      <div x-show="!ticketForm.id" class="flex items-center gap-3">
+        <label class="flex items-center gap-1 text-xs text-slate-600">
+          <input type="checkbox" x-model="ticketBatchMode">
+          連続入力モード
+        </label>
+        <span x-show="ticketBatchCounter > 0" class="text-xs text-emerald-700 font-medium">
+          ✓ <span x-text="ticketBatchCounter"></span>件 投入済
+        </span>
+      </div>
+    </div>
     <!-- 編集時の注意 -->
     <div x-show="ticketForm.id && ticketForm.linkedVisitId"
          class="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 mb-3">
@@ -1994,6 +2005,7 @@
       <div class="md:col-span-7">
         <label class="block text-xs text-slate-600 mb-1">顧客名 *</label>
         <input type="text" x-model="ticketForm.customerName"
+          id="ticketCustomerNameInput"
           placeholder="例: 山田太郎"
           class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
       </div>
@@ -2102,10 +2114,20 @@
          :class="ticketMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
          x-text="ticketMessage"></div>
 
-    <div class="flex justify-end gap-2 mt-5">
-      <button @click="ticketModalOpen = false"
-        class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">キャンセル</button>
-      <button @click="saveTicket().then(() => { if (ticketMessageType==='ok') ticketModalOpen = false })"
+    <div class="flex justify-end gap-2 mt-5 flex-wrap">
+      <button @click="ticketModalOpen = false; ticketBatchMode = false"
+        class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+        x-text="ticketBatchCounter > 0 ? '完了' : 'キャンセル'"></button>
+      <!-- 🆕 v0.8.3: 連続入力時の「追加して次へ」 -->
+      <button x-show="ticketBatchMode && !ticketForm.id"
+        @click="saveTicketAndContinue()"
+        :disabled="!canSaveTicket() || saving"
+        class="px-5 py-2 bg-purple-700 hover:bg-purple-800 disabled:bg-slate-300 text-white text-sm rounded-lg">
+        <span x-show="!saving">追加して次へ →</span>
+        <span x-show="saving">保存中...</span>
+      </button>
+      <button x-show="!ticketBatchMode || ticketForm.id"
+        @click="saveTicket().then(() => { if (ticketMessageType==='ok') ticketModalOpen = false })"
         :disabled="!canSaveTicket() || saving"
         class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded-lg">
         <span x-show="!saving" x-text="ticketForm.id ? '更新' : '追加'"></span>
@@ -4877,13 +4899,63 @@ function app() {
 
     // 手動追加モーダル開閉
     ticketModalOpen: false,
+    ticketBatchMode: false,         // 🆕 v0.8.3: 連続入力モード
+    ticketBatchCounter: 0,          // 🆕 v0.8.3: 連続投入カウンタ
     openTicketModal() {
       this.resetTicketForm();
+      this.ticketBatchMode = false;
+      this.ticketBatchCounter = 0;
       this.ticketModalOpen = true;
     },
     openTicketModalForEdit(t) {
       this.editTicket(t);
+      this.ticketBatchMode = false;
       this.ticketModalOpen = true;
+    },
+
+    // 🆕 v0.8.3: 連続入力モード「追加して次へ」
+    // 保存 → 顧客名・備考だけクリア(他は保持)→ 顧客名にフォーカス
+    async saveTicketAndContinue() {
+      if (!this.canSaveTicket()) return;
+      // 後で復元するために、現在の値を退避
+      const keep = {
+        ticketType: this.ticketForm.ticketType,
+        applicableMenu: this.ticketForm.applicableMenu,
+        purchaseDate: this.ticketForm.purchaseDate,
+        expiryDate: this.ticketForm.expiryDate,
+        totalCount: this.ticketForm.totalCount,
+        usedCount: this.ticketForm.usedCount,
+        unitPrice: this.ticketForm.unitPrice,
+        purchasePrice: this.ticketForm.purchasePrice,
+        isLegacy: this.ticketForm.isLegacy
+      };
+      // 保存実行(既存の saveTicket を呼ぶ。saveTicket 内で resetTicketForm() が呼ばれる)
+      await this.saveTicket();
+      // 保存成功時のみ次の人へ
+      if (this.ticketMessageType === 'ok') {
+        this.ticketBatchCounter++;
+        // 退避した値を復元
+        this.ticketForm.ticketType = keep.ticketType;
+        this.ticketForm.applicableMenu = keep.applicableMenu;
+        this.ticketForm.purchaseDate = keep.purchaseDate;
+        this.ticketForm.expiryDate = keep.expiryDate;
+        this.ticketForm.totalCount = keep.totalCount;
+        this.ticketForm.usedCount = keep.usedCount;
+        this.ticketForm.unitPrice = keep.unitPrice;
+        this.ticketForm.purchasePrice = keep.purchasePrice;
+        this.ticketForm.isLegacy = keep.isLegacy;
+        // 顧客名・備考・最終利用日はクリア
+        this.ticketForm.customerName = '';
+        this.ticketForm.note = '';
+        this.ticketForm.lastUsedDate = null;
+        // モーダルは閉じない
+        this.ticketModalOpen = true;
+        // 顧客名フィールドにフォーカス
+        this.$nextTick(() => {
+          const el = document.querySelector('#ticketCustomerNameInput');
+          if (el) el.focus();
+        });
+      }
     },
 
     // ===== /v0.8.2 パッチ#8 集計 =====
