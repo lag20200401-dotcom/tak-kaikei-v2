@@ -4461,6 +4461,143 @@ function app() {
     },
 
     // ===== /v0.8.1 パッチ#3-#7 =====
+    // ============================================
+    // ===== 🆕 v0.8.2 パッチ#8: 回数券タブ集計 =====
+    // ============================================
+
+    // 全チケットを最新のステータスに正規化して返す
+    // (Firestoreの status フィールドが古くても、期限切れなら expired と返す)
+    get normalizedTickets() {
+      return this.tickets.map(t => ({
+        ...t,
+        _status: this.getTicketStatus(t),
+        _daysLeft: this.getDaysUntilExpiry(t.expiryDate)
+      }));
+    },
+
+    // 期限切れだが残数がある「事故」券(警告対象)
+    get expiredButHasRemaining() {
+      return this.normalizedTickets.filter(t =>
+        t._status === 'expired' && (Number(t.remainingCount) || 0) > 0
+      );
+    },
+
+    // ステータス別件数(サマリーカード用)
+    get ticketCounts() {
+      const c = { active: 0, expiring: 0, expired: 0, used_up: 0, legacy: 0, total: 0 };
+      for (const t of this.normalizedTickets) {
+        c.total++;
+        if (t.isLegacy) c.legacy++;
+        if (t._status === 'active') {
+          c.active++;
+          if (t._daysLeft !== null && t._daysLeft <= 30) c.expiring++;
+        } else if (t._status === 'expired') {
+          c.expired++;
+        } else if (t._status === 'used_up') {
+          c.used_up++;
+        }
+      }
+      return c;
+    },
+
+    // 現在のフィルタに合致するチケット
+    get filteredTickets() {
+      const f = this.ticketFilter;
+      return this.normalizedTickets.filter(t => {
+        if (f === 'all') return true;
+        if (f === 'legacy') return !!t.isLegacy;
+        if (f === 'expiring') {
+          return t._status === 'active' && t._daysLeft !== null && t._daysLeft <= 30;
+        }
+        if (f === 'active') return t._status === 'active';
+        if (f === 'expired') return t._status === 'expired';
+        if (f === 'used_up') return t._status === 'used_up';
+        return true;
+      });
+    },
+
+    // 顧客名でグルーピング → [{ customerName, tickets[], totalRemaining }, ...]
+    get groupedTickets() {
+      const map = {};
+      for (const t of this.filteredTickets) {
+        const key = t.customerName || '(顧客名なし)';
+        if (!map[key]) {
+          map[key] = { customerName: key, tickets: [], totalRemaining: 0, totalValue: 0 };
+        }
+        map[key].tickets.push(t);
+        if (t._status === 'active') {
+          map[key].totalRemaining += Number(t.remainingCount) || 0;
+          map[key].totalValue += Number(t.remainingValue) || 0;
+        }
+      }
+      // グループ内のチケットを購入日昇順
+      for (const k in map) {
+        map[k].tickets.sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || ''));
+      }
+      // グループを顧客名でソート(ふりがながあれば優先、なければ名前)
+      return Object.values(map).sort((a, b) =>
+        (a.customerName || '').localeCompare(b.customerName || '', 'ja')
+      );
+    },
+
+    // 残数バッジの色クラス
+    ticketCountColor(count, status) {
+      if (status === 'expired' || status === 'used_up') return 'bg-slate-200 text-slate-500';
+      const n = Number(count) || 0;
+      if (n === 0) return 'bg-slate-200 text-slate-500';
+      if (n <= 2) return 'bg-red-100 text-red-700';
+      if (n <= 5) return 'bg-amber-100 text-amber-700';
+      return 'bg-emerald-100 text-emerald-700';
+    },
+
+    // 期限の色クラス
+    expiryDateColor(daysLeft) {
+      if (daysLeft === null) return 'text-slate-400';
+      if (daysLeft < 0) return 'text-red-600 font-bold';
+      if (daysLeft <= 30) return 'text-amber-600 font-medium';
+      return 'text-slate-600';
+    },
+
+    // 期限表示用テキスト
+    formatExpiry(t) {
+      if (!t.expiryDate) return '-';
+      const d = t._daysLeft;
+      if (d === null) return t.expiryDate;
+      if (d < 0) return `${t.expiryDate} (${Math.abs(d)}日経過)`;
+      if (d === 0) return `${t.expiryDate} (本日)`;
+      if (d <= 30) return `${t.expiryDate} (残${d}日)`;
+      return t.expiryDate;
+    },
+
+    // ステータス表示用テキスト・色
+    statusLabel(status) {
+      return { active: '有効', used_up: '使い切り', expired: '期限切れ' }[status] || status;
+    },
+    statusColor(status) {
+      return {
+        active: 'bg-emerald-100 text-emerald-700',
+        used_up: 'bg-slate-200 text-slate-600',
+        expired: 'bg-red-100 text-red-700'
+      }[status] || 'bg-slate-100 text-slate-600';
+    },
+
+    // 適用区分の表示名
+    applicableMenuLabel(am) {
+      return { all: '全メニュー', seitai: '整体', maintenance: 'メンテナンス' }[am] || am;
+    },
+
+    // 手動追加モーダル開閉
+    ticketModalOpen: false,
+    openTicketModal() {
+      this.resetTicketForm();
+      this.ticketModalOpen = true;
+    },
+    openTicketModalForEdit(t) {
+      this.editTicket(t);
+      this.ticketModalOpen = true;
+    },
+
+    // ===== /v0.8.2 パッチ#8 集計 =====
     // ===== /v0.8 回数券ヘルパー関数 =====
     emptyPurchase() {
       return {
