@@ -1829,11 +1829,115 @@
   
   <!-- ====== 🆕 v0.9: サブスクタブ(フェーズ7-A、ガワのみ) ====== -->
   <section x-show="currentTab==='subscriptions'" class="space-y-4">
-    <div class="bg-white rounded-xl shadow p-6">
-      <h2 class="text-xl font-bold text-slate-800 mb-2">💳 サブスク契約管理</h2>
-      <p class="text-sm text-slate-500">準備中(フェーズ7-A 実装中)</p>
-      <p class="text-xs text-slate-400 mt-2">スクエア月初決済とライフカード来院毎決済の契約マスター、月次入金記録を管理します。</p>
+
+    <!-- ヘッダー -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">💳 サブスク契約管理</h2>
+          <p class="text-xs text-slate-500 mt-1">スクエア月初決済とライフカード来院毎決済の契約を管理します。</p>
+        </div>
+        <button @click="openSubscriptionModal()"
+          class="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-sm rounded-lg">
+          ＋新規契約追加
+        </button>
+      </div>
     </div>
+
+    <!-- サマリーカード -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">アクティブ契約</div>
+        <div class="text-2xl font-bold text-emerald-600" x-text="subscriptionSummary.activeCount + '件'"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">月次入金予定</div>
+        <div class="text-2xl font-bold text-slate-800" x-text="'¥' + subscriptionSummary.monthlyTotal.toLocaleString()"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">合計契約数</div>
+        <div class="text-2xl font-bold text-slate-600" x-text="subscriptions.length + '件'"></div>
+      </div>
+    </div>
+
+    <!-- フィルタ + 検索 -->
+    <div class="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap">
+      <div class="flex gap-1">
+        <template x-for="f in [
+          {id: 'active',    label: 'アクティブ'},
+          {id: 'paused',    label: '一時停止'},
+          {id: 'cancelled', label: '解約済'},
+          {id: 'all',       label: '全件'}
+        ]" :key="f.id">
+          <button @click="subscriptionFilter = f.id"
+                  :class="subscriptionFilter === f.id ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap"
+                  x-text="f.label"></button>
+        </template>
+      </div>
+      <span class="text-slate-300 mx-1">|</span>
+      <label class="text-sm text-slate-600 whitespace-nowrap">🔍 顧客名:</label>
+      <input type="text" x-model="subscriptionSearchName"
+             placeholder="名前の一部(例: 鈴木)"
+             class="flex-1 min-w-[200px] px-3 py-1.5 border border-slate-300 rounded text-sm">
+      <button x-show="subscriptionSearchName" @click="subscriptionSearchName = ''"
+              class="text-xs px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded">
+        クリア
+      </button>
+      <span class="text-xs text-slate-500"
+            x-text="filteredSubscriptions.length + '件 該当'"></span>
+    </div>
+
+    <!-- 一覧 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div x-show="filteredSubscriptions.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        該当する契約がありません<br>
+        <span class="text-xs">右上「＋新規契約追加」から登録してください</span>
+      </div>
+      <div x-show="filteredSubscriptions.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">顧客名</th>
+              <th class="px-3 py-2 text-left">プラン</th>
+              <th class="px-3 py-2 text-right">月額</th>
+              <th class="px-3 py-2 text-left">支払</th>
+              <th class="px-3 py-2 text-left">開始日</th>
+              <th class="px-3 py-2 text-center">状態</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="s in filteredSubscriptions" :key="s.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 font-medium" x-text="s.customerName"></td>
+                <td class="px-3 py-2 text-xs">
+                  <span x-text="s.unitAmount.toLocaleString() + '円 × ' + s.units + '口'"></span>
+                </td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + (s.monthlyAmount || 0).toLocaleString()"></td>
+                <td class="px-3 py-2 text-xs" x-text="s.paymentMethod"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="s.startDate"></td>
+                <td class="px-3 py-2 text-center">
+                  <span class="text-xs px-2 py-0.5 rounded"
+                        :class="subscriptionStatusColor(s.status)"
+                        x-text="subscriptionStatusLabel(s.status)"></span>
+                </td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button @click="editSubscription(s)" class="text-xs text-teal-700 hover:underline">編集</button>
+                  <button @click="deleteSubscription(s)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- メッセージ -->
+    <div x-show="subscriptionMessage" class="text-sm"
+         :class="subscriptionMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+         x-text="subscriptionMessage"></div>
+
   </section>
   
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
@@ -4983,6 +5087,64 @@ function app() {
 
     // ===== /v0.8.2 パッチ#8 集計 =====
     // ===== /v0.8 回数券ヘルパー関数 =====
+    // ============================================
+    // ===== 🆕 v0.9: サブスクヘルパー関数 =====
+    // ============================================
+
+    // フィルタ後のサブスク一覧
+    get filteredSubscriptions() {
+      const f = this.subscriptionFilter;
+      const q = (this.subscriptionSearchName || '').trim();
+      return this.subscriptions.filter(s => {
+        if (q && !(s.customerName || '').includes(q)) return false;
+        if (f === 'all') return true;
+        return s.status === f;
+      });
+    },
+
+    // サマリー(アクティブ件数・月次入金合計)
+    get subscriptionSummary() {
+      let activeCount = 0;
+      let monthlyTotal = 0;
+      for (const s of this.subscriptions) {
+        if (s.status === 'active') {
+          activeCount++;
+          monthlyTotal += Number(s.monthlyAmount) || 0;
+        }
+      }
+      return { activeCount, monthlyTotal };
+    },
+
+    // 状態の表示色
+    subscriptionStatusColor(status) {
+      return {
+        active:    'bg-emerald-100 text-emerald-700',
+        paused:    'bg-amber-100 text-amber-700',
+        cancelled: 'bg-slate-200 text-slate-600'
+      }[status] || 'bg-slate-100 text-slate-600';
+    },
+
+    // 状態の表示テキスト
+    subscriptionStatusLabel(status) {
+      return {
+        active:    'アクティブ',
+        paused:    '一時停止',
+        cancelled: '解約済'
+      }[status] || status;
+    },
+
+    // 以下、CRUD関数(パッチ③-Cで実装、ここではダミー定義しておく)
+    openSubscriptionModal() {
+      console.log('openSubscriptionModal: パッチ③-Cで実装予定');
+    },
+    editSubscription(s) {
+      console.log('editSubscription: パッチ③-Cで実装予定', s);
+    },
+    deleteSubscription(s) {
+      console.log('deleteSubscription: パッチ③-Cで実装予定', s);
+    },
+
+    // ===== /v0.9 サブスクヘルパー関数 =====
     emptyPurchase() {
       return {
         id: null,
