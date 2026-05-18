@@ -4803,10 +4803,13 @@ function app() {
       return c;
     },
 
-    // 現在のフィルタに合致するチケット
+   // 現在のフィルタに合致するチケット
     get filteredTickets() {
       const f = this.ticketFilter;
+      const q = (this.ticketSearchName || '').trim();
       return this.normalizedTickets.filter(t => {
+        // 🆕 v0.8.4: 名前検索フィルタ
+        if (q && !(t.customerName || '').includes(q)) return false;
         if (f === 'all') return true;
         if (f === 'legacy') return !!t.isLegacy;
         if (f === 'expiring') {
