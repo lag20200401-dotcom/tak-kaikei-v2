@@ -5296,10 +5296,25 @@ function app() {
     },
 
     editSubscription(s) {
-      // パッチ③-C2で本格実装。今はダミー
-      console.log('editSubscription: パッチ③-C2で実装予定', s);
+      // 既存契約データをフォームに展開してモーダルを開く
+      this.subscriptionForm = {
+        id: s.id,
+        customerName: s.customerName || '',
+        customerId: s.customerId || null,
+        planType: s.planType || 'subsc_square',
+        unitAmount: Number(s.unitAmount) || 8800,
+        units: Number(s.units) || 1,
+        monthlyAmount: Number(s.monthlyAmount) || 8800,
+        paymentMethod: s.paymentMethod || (s.planType === 'subsc_life' ? 'ライフカード' : 'スクエア'),
+        startDate: s.startDate || this.todayStr(),
+        endDate: s.endDate || null,
+        status: s.status || 'active',
+        billingDay: s.planType === 'subsc_square' ? 1 : null,
+        note: s.note || ''
+      };
+      this.subscriptionMessage = '';
+      this.subscriptionModalOpen = true;
     },
-
     async saveSubscription() {
       if (!this.canSaveSubscription()) {
         this.subscriptionMessage = '必須項目が未入力です';
