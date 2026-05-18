@@ -2254,7 +2254,134 @@
     </div>
   </div>
 </div>
-<!-- ===== 物販 一括投入モーダル ===== -->
+<!-- ===== 🆕 v0.9: サブスク契約 追加/編集モーダル ===== -->
+<div x-show="subscriptionModalOpen" x-cloak
+     class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-40">
+  <div @click.outside="subscriptionModalOpen = false"
+       class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+    <h3 class="text-lg font-bold text-slate-800 mb-4"
+        x-text="subscriptionForm.id ? 'サブスク契約を編集' : 'サブスク契約を追加'"></h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+
+      <!-- 顧客名 -->
+      <div class="md:col-span-12">
+        <label class="block text-xs text-slate-600 mb-1">顧客名 *</label>
+        <input type="text" x-model="subscriptionForm.customerName"
+          placeholder="例: 山田太郎"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- プラン種別 -->
+      <div class="md:col-span-12">
+        <label class="block text-xs text-slate-600 mb-1">プラン種別 *</label>
+        <div class="flex gap-2 flex-wrap">
+          <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer flex-1"
+                 :class="subscriptionForm.planType === 'subsc_square' ? 'border-teal-500 bg-teal-50' : 'border-slate-300'">
+            <input type="radio" x-model="subscriptionForm.planType" value="subsc_square"
+                   @change="subscriptionForm.paymentMethod = 'スクエア'; subscriptionForm.billingDay = 1">
+            <div>
+              <div class="text-sm font-medium">スクエア(月初自動決済)</div>
+              <div class="text-xs text-slate-500">毎月1日にカード自動引落</div>
+            </div>
+          </label>
+          <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer flex-1"
+                 :class="subscriptionForm.planType === 'subsc_life' ? 'border-teal-500 bg-teal-50' : 'border-slate-300'">
+            <input type="radio" x-model="subscriptionForm.planType" value="subsc_life"
+                   @change="subscriptionForm.paymentMethod = 'ライフカード'; subscriptionForm.billingDay = null">
+            <div>
+              <div class="text-sm font-medium">ライフカード(来院毎決済)</div>
+              <div class="text-xs text-slate-500">来院時にライフで都度決済</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 1口あたり金額(固定表示) -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">1口あたり</label>
+        <div class="px-3 py-2 bg-slate-100 rounded-lg text-sm text-slate-700">
+          ¥<span x-text="subscriptionForm.unitAmount.toLocaleString()"></span>
+        </div>
+      </div>
+
+      <!-- 口数 -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">口数 *</label>
+        <select x-model.number="subscriptionForm.units"
+                @change="subscriptionForm.monthlyAmount = subscriptionForm.unitAmount * subscriptionForm.units"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+          <option :value="1">1口</option>
+          <option :value="2">2口</option>
+          <option :value="3">3口</option>
+          <option :value="4">4口</option>
+        </select>
+      </div>
+
+      <!-- 月額(自動計算) -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">月額(自動計算)</label>
+        <div class="px-3 py-2 bg-emerald-50 rounded-lg text-sm font-bold text-emerald-700">
+          ¥<span x-text="(subscriptionForm.unitAmount * subscriptionForm.units).toLocaleString()"></span>
+        </div>
+      </div>
+
+      <!-- 開始日 -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">契約開始日 *</label>
+        <input type="date" x-model="subscriptionForm.startDate"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 引落日(スクエアのみ) -->
+      <div class="md:col-span-4" x-show="subscriptionForm.planType === 'subsc_square'">
+        <label class="block text-xs text-slate-600 mb-1">引落日</label>
+        <div class="px-3 py-2 bg-slate-100 rounded-lg text-sm text-slate-700">毎月1日(固定)</div>
+      </div>
+
+      <!-- 状態 -->
+      <div class="md:col-span-4">
+        <label class="block text-xs text-slate-600 mb-1">状態</label>
+        <select x-model="subscriptionForm.status"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+          <option value="active">アクティブ</option>
+          <option value="paused">一時停止</option>
+          <option value="cancelled">解約済</option>
+        </select>
+      </div>
+
+      <!-- 解約日(cancelledのみ) -->
+      <div class="md:col-span-6" x-show="subscriptionForm.status === 'cancelled'">
+        <label class="block text-xs text-slate-600 mb-1">解約日</label>
+        <input type="date" x-model="subscriptionForm.endDate"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+
+      <!-- 備考 -->
+      <div class="md:col-span-12">
+        <label class="block text-xs text-slate-600 mb-1">備考</label>
+        <input type="text" x-model="subscriptionForm.note" placeholder="任意"
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+      </div>
+    </div>
+
+    <!-- メッセージ -->
+    <div x-show="subscriptionMessage" class="mt-3 text-sm"
+         :class="subscriptionMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
+         x-text="subscriptionMessage"></div>
+
+    <div class="flex justify-end gap-2 mt-5">
+      <button @click="subscriptionModalOpen = false"
+        class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">キャンセル</button>
+      <button @click="saveSubscription().then(() => { if (subscriptionMessageType==='ok') subscriptionModalOpen = false })"
+        :disabled="!canSaveSubscription() || saving"
+        class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded-lg">
+        <span x-show="!saving" x-text="subscriptionForm.id ? '更新' : '追加'"></span>
+        <span x-show="saving">保存中...</span>
+      </button>
+    </div>
+  </div>
+</div><!-- ===== 物販 一括投入モーダル ===== -->
 <div x-show="salesBulkModalOpen" x-cloak
      class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-40">
   <div @click.outside="salesBulkModalOpen = false"
@@ -5133,15 +5260,107 @@ function app() {
       }[status] || status;
     },
 
-    // 以下、CRUD関数(パッチ③-Cで実装、ここではダミー定義しておく)
+    // ===== CRUD関数(本物) =====
+    
+    emptySubscription() {
+      return {
+        id: null,
+        customerName: '',
+        customerId: null,
+        planType: 'subsc_square',
+        unitAmount: 8800,
+        units: 1,
+        monthlyAmount: 8800,
+        paymentMethod: 'スクエア',
+        startDate: this.todayStr(),
+        endDate: null,
+        status: 'active',
+        billingDay: 1,
+        note: ''
+      };
+    },
+
+    resetSubscriptionForm() {
+      this.subscriptionForm = this.emptySubscription();
+      this.subscriptionMessage = '';
+    },
+
+    canSaveSubscription() {
+      const s = this.subscriptionForm;
+      return s.customerName && s.planType && s.units >= 1 && s.startDate;
+    },
+
     openSubscriptionModal() {
-      console.log('openSubscriptionModal: パッチ③-Cで実装予定');
+      this.resetSubscriptionForm();
+      this.subscriptionModalOpen = true;
     },
+
     editSubscription(s) {
-      console.log('editSubscription: パッチ③-Cで実装予定', s);
+      // パッチ③-C2で本格実装。今はダミー
+      console.log('editSubscription: パッチ③-C2で実装予定', s);
     },
-    deleteSubscription(s) {
-      console.log('deleteSubscription: パッチ③-Cで実装予定', s);
+
+    async saveSubscription() {
+      if (!this.canSaveSubscription()) {
+        this.subscriptionMessage = '必須項目が未入力です';
+        this.subscriptionMessageType = 'err';
+        return;
+      }
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.subscriptionMessage = '';
+
+      try {
+        const s = this.subscriptionForm;
+        const unitAmount = Number(s.unitAmount) || 8800;
+        const units = Number(s.units) || 1;
+        const monthlyAmount = unitAmount * units;
+
+        const ref = s.id
+          ? doc(db, 'subscriptions', s.id)
+          : doc(collection(db, 'subscriptions'));
+
+        const data = {
+          customerName: (s.customerName || '').trim(),
+          customerId: s.customerId || null,
+          planType: s.planType,
+          unitAmount: unitAmount,
+          units: units,
+          monthlyAmount: monthlyAmount,
+          paymentMethod: s.paymentMethod,
+          startDate: s.startDate,
+          endDate: s.endDate || null,
+          status: s.status || 'active',
+          billingDay: s.planType === 'subsc_square' ? 1 : null,
+          note: s.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (!s.id) data.createdAt = serverTimestamp();
+
+        await setDoc(ref, data, { merge: true });
+
+        this.subscriptionMessage = s.id ? '更新しました' : '追加しました';
+        this.subscriptionMessageType = 'ok';
+        this.resetSubscriptionForm();
+        setTimeout(() => this.subscriptionMessage = '', 2500);
+      } catch (e) {
+        console.error(e);
+        this.subscriptionMessage = 'エラー: ' + e.message;
+        this.subscriptionMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async deleteSubscription(s) {
+      const label = `${s.customerName} / ${s.planType === 'subsc_square' ? 'スクエア' : 'ライフ'} ${s.units}口 ¥${(s.monthlyAmount||0).toLocaleString()}/月`;
+      if (!confirm(`サブスク契約を削除します:\n\n${label}\n\nこの操作は取り消せません。よろしいですか?`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'subscriptions', s.id));
+      } catch (err) {
+        alert('削除エラー: ' + err.message);
+      }
     },
 
     // ===== /v0.9 サブスクヘルパー関数 =====
