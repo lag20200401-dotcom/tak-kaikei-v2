@@ -55,7 +55,7 @@
       <span class="font-bold text-slate-800">整体院TAK</span>
       <span class="text-slate-400 mx-2">/</span>
       <span class="text-sm text-slate-600">経営管理 v2</span>
-      <span class="text-xs text-teal-600 ml-2 font-medium">v0.8.4</span>
+      <span class="text-xs text-teal-600 ml-2 font-medium">v0.9.0-a1</span>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs px-2 py-1 rounded"
@@ -2467,9 +2467,9 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp
+  onSnapshot, query, orderBy, serverTimestamp,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-
 // Firebase 設定
 const firebaseConfig = {
   apiKey: "AIzaSyAIzljpQd7ssjQJCpBrhQ1djPxmpTfDISU",
@@ -2488,7 +2488,8 @@ const db = initializeFirestore(fbApp, {
 // グローバルに公開(Alpine から使うため)
 window._fb = {
   db, collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp
+  onSnapshot, query, orderBy, serverTimestamp,
+  writeBatch
 };
 
 // 起動完了通知
@@ -2566,6 +2567,7 @@ function app() {
     purchases: [],      // 🆕 v0.7 仕入記録
     tickets: [],        // 🆕 v0.8 回数券データ
     subscriptions: [],  // 🆕 v0.9 サブスク契約マスター
+    subscriptionPayments: [],  // 🆕 v0.9.0-a1 サブスク月次払い込み記録
 
     // 🆕 v0.8: 回数券種別マスター(購入時のテンプレ)
     TICKET_TYPES: {
@@ -2714,6 +2716,8 @@ function app() {
     subscriptionSearchName: '',
     subscriptionModalOpen: false,
     showSubscriptionSuggest: false,
+    // 🆕 v0.9.0-a1: 月次払い込み記録
+    paymentTargetMonth: '',
     // ===== 🆕 v0.8: Legacy一括インポート用 =====
     legacyImportText: '',
     legacyImportPreview: [],
@@ -2761,6 +2765,7 @@ function app() {
       this.purchaseFilterMonth = this.currentMonthStr();
       this.cashbookMonth = this.currentMonthStr();
       this.exportMonth = this.prevMonth(this.currentMonthStr());  // デフォルト前月
+      this.paymentTargetMonth = this.getDefaultPaymentTargetMonth();  // 🆕 v0.9.0-a1: 翌月
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -2868,6 +2873,12 @@ function app() {
         this.subscriptions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error('subscriptions購読エラー:', err); this.cloudStatus = '接続エラー'; });
       this.unsubscribers.push(u10);
+
+      // 🆕 v0.9.0-a1: サブスク月次払い込み記録の購読(年月降順)
+      const u11 = onSnapshot(query(collection(db, 'subscription_payments'), orderBy('yearMonth', 'desc')), snap => {
+        this.subscriptionPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('subscription_payments購読エラー:', err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u11);
     },
 
     // 🆕 v0.6.4: 全リスナー停止
@@ -4425,10 +4436,19 @@ function app() {
       this.cashbookCarryEditing = false;
     },
 
-    prevMonth(yyyymm) {
+   prevMonth(yyyymm) {
       const [y, m] = yyyymm.split('-').map(Number);
       const d = new Date(y, m - 2, 1);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    },
+
+    // 🆕 v0.9.0-a1: 翌月を 'YYYY-MM' 形式で返す(月次払い込み生成のデフォルト値)
+    getDefaultPaymentTargetMonth() {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const y = next.getFullYear();
+      const m = String(next.getMonth() + 1).padStart(2, '0');
+      return `${y}-${m}`;
     },
 
     calcMonthCashSummary(month) {
