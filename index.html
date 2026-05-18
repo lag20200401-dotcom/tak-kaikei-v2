@@ -1700,9 +1700,25 @@
           <span x-text="ticketCounts.total"></span>
           <span class="text-sm text-purple-600 ml-1">/<span x-text="ticketCounts.legacy"></span></span>
         </div>
-      </div>
+      </div> 
+    </div>
+<!-- 🆕 v0.8.4: 名前検索 -->
+    <div class="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap">
+      <label class="text-sm text-slate-600 whitespace-nowrap">🔍 顧客名:</label>
+      <input type="text" x-model="ticketSearchName"
+             placeholder="名前の一部を入力(例: 鈴木)"
+             class="flex-1 min-w-[200px] px-3 py-1.5 border border-slate-300 rounded text-sm">
+      <button x-show="ticketSearchName" @click="ticketSearchName = ''"
+              class="text-xs px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded">
+        クリア
+      </button>
+      <span x-show="ticketSearchName" class="text-xs text-slate-500"
+            x-text="groupedTickets.length + '人 該当'"></span>
     </div>
 
+    <!-- フィルタタブ -->
+    <div class="bg-white rounded-xl shadow p-2 flex gap-1 overflow-x-auto">
+      <template x-for="f in [
     <!-- フィルタタブ -->
     <div class="bg-white rounded-xl shadow p-2 flex gap-1 overflow-x-auto">
       <template x-for="f in [
@@ -2442,6 +2458,7 @@ function app() {
     ticketMessage: '',
     ticketMessageType: 'ok',
     ticketFilter: 'active',     // 'all' / 'active' / 'expiring' / 'expired' / 'used_up' / 'legacy'
+    ticketSearchName: '',       // 🆕 v0.8.4: 名前検索
 
     // ===== 🆕 v0.8: Legacy一括インポート用 =====
     legacyImportText: '',
@@ -4815,7 +4832,10 @@ function app() {
     // 現在のフィルタに合致するチケット
     get filteredTickets() {
       const f = this.ticketFilter;
+      const q = (this.ticketSearchName || '').trim();
       return this.normalizedTickets.filter(t => {
+        // 🆕 v0.8.4: 名前検索フィルタ
+        if (q && !(t.customerName || '').includes(q)) return false;
         if (f === 'all') return true;
         if (f === 'legacy') return !!t.isLegacy;
         if (f === 'expiring') {
