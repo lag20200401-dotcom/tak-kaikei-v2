@@ -2752,12 +2752,35 @@ function app() {
       }
     },
 
-    get filteredVisits() {
+   get filteredVisits() {
       if (!this.visitFilterMonth) return this.visits;
       return this.visits.filter(v => (v.date || '').startsWith(this.visitFilterMonth));
     },
     visitTotalAmount() {
       return this.filteredVisits.reduce((s, v) => s + (v.amount || 0), 0);
+    },
+    // 🆕 v0.8.5: 日付でグルーピング → [{ date, count, dayTotal, visits[] }, ...]
+    get groupedVisits() {
+      const map = {};
+      for (const v of this.filteredVisits) {
+        const key = v.date || '';
+        if (!map[key]) {
+          map[key] = { date: key, count: 0, dayTotal: 0, visits: [] };
+        }
+        map[key].count++;
+        map[key].dayTotal += Number(v.amount) || 0;
+        map[key].visits.push(v);
+      }
+      // 日付の新しい順
+      return Object.values(map).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    },
+    // 🆕 v0.8.5: 日付に曜日を付ける(2026-05-19 → 2026-05-19(火))
+    formatDateWithWeekday(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+      return `${dateStr}(${weekdays[d.getDay()]})`;
     },
 
     async saveVisit() {
