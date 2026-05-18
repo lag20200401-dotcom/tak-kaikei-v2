@@ -243,24 +243,38 @@
             </tr>
           </thead>
           <tbody>
-            <template x-for="v in filteredVisits" :key="v.id">
-              <tr class="border-t border-slate-100 hover:bg-slate-50">
-                <td class="px-3 py-2 whitespace-nowrap" x-text="v.date"></td>
-                <td class="px-3 py-2" x-text="v.customerName"></td>
-                <td class="px-3 py-2" x-text="v.menu"></td>
-                <td class="px-3 py-2 text-right" x-text="'¥' + (v.amount||0).toLocaleString()"></td>
-                <td class="px-3 py-2" x-text="v.staff"></td>
-                <td class="px-3 py-2" x-text="v.paymentMethod"></td>
-                <td class="px-3 py-2">
-                  <span class="text-xs px-2 py-0.5 rounded"
-                        :class="categoryColor(v.cashbookCategory)"
-                        x-text="v.cashbookCategory"></span>
-                </td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">
-                  <button @click="editVisit(v)" class="text-xs text-teal-700 hover:underline">編集</button>
-                  <button @click="deleteVisit(v)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
-                </td>
-              </tr>
+           <!-- 🆕 v0.8.5: 日付グループごとに区切る -->
+            <template x-for="group in groupedVisits" :key="group.date">
+              <template x-for="(v, idx) in group.visits" :key="v.id">
+                <tr class="border-t border-slate-100 hover:bg-slate-50">
+                  <!-- 同じ日の1件目だけ日付ヘッダーセル(rowspan)を表示 -->
+                  <template x-if="idx === 0">
+                    <td class="px-3 py-2 whitespace-nowrap bg-slate-50 font-medium border-r border-slate-200 align-top"
+                        :rowspan="group.visits.length">
+                      <div class="text-slate-800" x-text="formatDateWithWeekday(group.date)"></div>
+                      <div class="text-xs text-slate-500 mt-1">
+                        <span x-text="group.count + '件'"></span>
+                      </div>
+                      <div class="text-xs text-teal-700 font-bold mt-0.5"
+                           x-text="'¥' + group.dayTotal.toLocaleString()"></div>
+                    </td>
+                  </template>
+                  <td class="px-3 py-2" x-text="v.customerName"></td>
+                  <td class="px-3 py-2" x-text="v.menu"></td>
+                  <td class="px-3 py-2 text-right" x-text="'¥' + (v.amount||0).toLocaleString()"></td>
+                  <td class="px-3 py-2" x-text="v.staff"></td>
+                  <td class="px-3 py-2" x-text="v.paymentMethod"></td>
+                  <td class="px-3 py-2">
+                    <span class="text-xs px-2 py-0.5 rounded"
+                          :class="categoryColor(v.cashbookCategory)"
+                          x-text="v.cashbookCategory"></span>
+                  </td>
+                  <td class="px-3 py-2 text-right whitespace-nowrap">
+                    <button @click="editVisit(v)" class="text-xs text-teal-700 hover:underline">編集</button>
+                    <button @click="deleteVisit(v)" class="text-xs text-red-500 hover:underline ml-2">削除</button>
+                  </td>
+                </tr>
+              </template>
             </template>
           </tbody>
         </table>
