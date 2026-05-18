@@ -2334,6 +2334,7 @@ function app() {
     monthlyExports: [], // 🆕 v0.5
     purchases: [],      // 🆕 v0.7 仕入記録
     tickets: [],        // 🆕 v0.8 回数券データ
+    subscriptions: [],  // 🆕 v0.9 サブスク契約マスター
 
     // 🆕 v0.8: 回数券種別マスター(購入時のテンプレ)
     TICKET_TYPES: {
@@ -2459,6 +2460,29 @@ function app() {
     ticketMessageType: 'ok',
     ticketFilter: 'active',     // 'all' / 'active' / 'expiring' / 'expired' / 'used_up' / 'legacy'
     ticketSearchName: '',       // 🆕 v0.8.4: 名前検索
+
+    // ===== 🆕 v0.9: サブスク契約フォーム・フィルタ =====
+    subscriptionForm: {
+      id: null,
+      customerName: '',
+      customerId: null,
+      planType: 'subsc_square',
+      unitAmount: 8800,
+      units: 1,
+      monthlyAmount: 8800,
+      paymentMethod: 'スクエア',
+      startDate: '',
+      endDate: null,
+      status: 'active',
+      billingDay: 1,
+      note: ''
+    },
+    subscriptionMessage: '',
+    subscriptionMessageType: 'ok',
+    subscriptionFilter: 'active',  // 'all' / 'active' / 'paused' / 'cancelled'
+    subscriptionSearchName: '',
+    subscriptionModalOpen: false,
+    showSubscriptionSuggest: false,
     // ===== 🆕 v0.8: Legacy一括インポート用 =====
     legacyImportText: '',
     legacyImportPreview: [],
@@ -2607,6 +2631,12 @@ function app() {
         this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error('tickets購読エラー:', err); this.cloudStatus = '接続エラー'; });
       this.unsubscribers.push(u9);
+
+      // 🆕 v0.9: サブスク契約の購読(開始日昇順)
+      const u10 = onSnapshot(query(collection(db, 'subscriptions'), orderBy('startDate', 'asc')), snap => {
+        this.subscriptions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('subscriptions購読エラー:', err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u10);
     },
 
     // 🆕 v0.6.4: 全リスナー停止
