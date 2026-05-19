@@ -55,7 +55,7 @@
       <span class="font-bold text-slate-800">整体院TAK</span>
       <span class="text-slate-400 mx-2">/</span>
       <span class="text-sm text-slate-600">経営管理 v2</span>
-      <span class="text-xs text-teal-600 ml-2 font-medium">v0.9.0-a1</span>
+      <span class="text-xs text-teal-600 ml-2 font-medium">v0.9.0-a2</span>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs px-2 py-1 rounded"
@@ -1937,7 +1937,95 @@
     <div x-show="subscriptionMessage" class="text-sm"
          :class="subscriptionMessageType==='ok' ? 'text-emerald-600' : 'text-red-500'"
          x-text="subscriptionMessage"></div>
+<!-- 🆕 v0.9.0-a2: 月次払い込み記録セクション -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+        <div>
+          <h3 class="text-base font-bold text-slate-800">📅 月次払い込み記録</h3>
+          <p class="text-xs text-slate-500 mt-1">スクエア月初決済の請求・入金状況を管理します(ライフカードは対象外)</p>
+        </div>
+      </div>
 
+      <!-- 対象月選択 + 生成ボタン -->
+      <div class="bg-slate-50 rounded-lg p-3 flex items-center gap-2 flex-wrap mb-3">
+        <label class="text-sm text-slate-600">対象月:</label>
+        <input type="month" x-model="paymentTargetMonth"
+               class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+        <button @click="generateMonthlyPayments()" :disabled="!paymentTargetMonth || saving"
+          class="px-4 py-1.5 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded">
+          この月の請求を生成
+        </button>
+        <span class="text-xs text-slate-500 ml-auto">アクティブなスクエア契約者の請求を一括生成します</span>
+      </div>
+
+      <!-- サマリー -->
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <div class="bg-slate-50 rounded p-2">
+          <div class="text-xs text-slate-500">予定</div>
+          <div class="text-sm font-bold text-slate-800">
+            <span x-text="paymentSummary.total"></span>件
+            <span class="text-xs text-slate-500 ml-1" x-text="'¥' + paymentSummary.totalAmount.toLocaleString()"></span>
+          </div>
+        </div>
+        <div class="bg-emerald-50 rounded p-2">
+          <div class="text-xs text-emerald-700">入金済</div>
+          <div class="text-sm font-bold text-emerald-700">
+            <span x-text="paymentSummary.paid"></span>件
+            <span class="text-xs ml-1" x-text="'¥' + paymentSummary.paidAmount.toLocaleString()"></span>
+          </div>
+        </div>
+        <div class="bg-amber-50 rounded p-2">
+          <div class="text-xs text-amber-700">未入金</div>
+          <div class="text-sm font-bold text-amber-700">
+            <span x-text="paymentSummary.pending"></span>件
+            <span class="text-xs ml-1" x-text="'¥' + paymentSummary.pendingAmount.toLocaleString()"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 一覧 -->
+      <div x-show="filteredPayments.length === 0"
+           class="p-6 text-center text-slate-400 text-sm">
+        この月の請求はまだありません<br>
+        <span class="text-xs">上の「この月の請求を生成」ボタンから生成してください</span>
+      </div>
+
+      <div x-show="filteredPayments.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600 text-xs">
+            <tr>
+              <th class="px-3 py-2 text-left">顧客名</th>
+              <th class="px-3 py-2 text-right">月額</th>
+              <th class="px-3 py-2 text-left">予定日</th>
+              <th class="px-3 py-2 text-center">状態</th>
+              <th class="px-3 py-2 text-left">入金日</th>
+              <th class="px-3 py-2 text-left">備考</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in filteredPayments" :key="p.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 font-medium" x-text="p.customerName"></td>
+                <td class="px-3 py-2 text-right font-bold" x-text="'¥' + (p.amount||0).toLocaleString()"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="p.scheduledDate"></td>
+                <td class="px-3 py-2 text-center">
+                  <span class="text-xs px-2 py-0.5 rounded"
+                        :class="p.status==='paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+                        x-text="p.status==='paid' ? '✅ 入金済' : '⏳ 未入金'"></span>
+                </td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="p.paidDate || '-'"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="p.note || ''"></td>
+                <td class="px-3 py-2 text-right text-xs text-slate-400 whitespace-nowrap">
+                  <!-- ④-B で paid/取消ボタン追加予定 -->
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
   </section>
   
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
@@ -5398,6 +5486,112 @@ function app() {
       }
     },
 
+// ===== 🆕 v0.9.0-a2: 月次払い込み記録 =====
+
+    // 対象月のpayment一覧
+    get filteredPayments() {
+      const ym = this.paymentTargetMonth;
+      if (!ym) return [];
+      return this.subscriptionPayments
+        .filter(p => p.yearMonth === ym)
+        .sort((a, b) => {
+          // 未入金を先に、その中で顧客名昇順
+          if (a.status !== b.status) return a.status === 'pending' ? -1 : 1;
+          return (a.customerName || '').localeCompare(b.customerName || '', 'ja');
+        });
+    },
+
+    // サマリー(件数・金額)
+    get paymentSummary() {
+      const list = this.filteredPayments;
+      let paid = 0, pending = 0, paidAmount = 0, pendingAmount = 0;
+      for (const p of list) {
+        if (p.status === 'paid') {
+          paid++;
+          paidAmount += Number(p.amount) || 0;
+        } else {
+          pending++;
+          pendingAmount += Number(p.amount) || 0;
+        }
+      }
+      return {
+        total: list.length,
+        totalAmount: paidAmount + pendingAmount,
+        paid, paidAmount,
+        pending, pendingAmount
+      };
+    },
+
+    // 月次一括生成
+    async generateMonthlyPayments() {
+      const yearMonth = this.paymentTargetMonth;
+      if (!yearMonth) {
+        alert('対象月を選択してください');
+        return;
+      }
+      const { db, collection, doc, writeBatch, serverTimestamp } = window._fb;
+
+      // 1. 既存チェック
+      const existing = this.subscriptionPayments.filter(p => p.yearMonth === yearMonth);
+      if (existing.length > 0) {
+        if (!confirm(`${yearMonth} の請求は既に ${existing.length} 件生成されています。\n\n既存契約に対して追加で生成しますか?\n(既に生成済みの契約はスキップされます)`)) return;
+      }
+
+      // 2. 過去月への生成警告
+      const todayYM = this.todayStr().substring(0, 7);
+      if (yearMonth < todayYM) {
+        if (!confirm(`⚠️ ${yearMonth} は過去月です。\n\n本当に生成しますか?`)) return;
+      }
+
+      // 3. アクティブな subsc_square 契約を取得
+      const activeSquare = this.subscriptions.filter(s =>
+        s.status === 'active' && s.planType === 'subsc_square'
+      );
+
+      if (activeSquare.length === 0) {
+        alert('アクティブなスクエア契約がありません');
+        return;
+      }
+
+      // 4. 既存 payment が無い契約だけ生成対象
+      const existingSubIds = new Set(existing.map(p => p.subscriptionId));
+      const targets = activeSquare.filter(s => !existingSubIds.has(s.id));
+
+      if (targets.length === 0) {
+        alert(`${yearMonth} の請求は全ての契約について既に生成済みです`);
+        return;
+      }
+
+      // 5. 確認ダイアログ
+      const total = targets.reduce((sum, s) => sum + (s.monthlyAmount || 0), 0);
+      const preview = targets.slice(0, 10).map(s =>
+        `・${s.customerName} ¥${(s.monthlyAmount || 0).toLocaleString()}`
+      ).join('\n');
+      const more = targets.length > 10 ? `\n... 他 ${targets.length - 10} 件` : '';
+      if (!confirm(
+        `${yearMonth} の請求を ${targets.length} 件 生成します。\n\n` +
+        `合計: ¥${total.toLocaleString()}\n\n` +
+        preview + more
+      )) return;
+
+      // 6. 一括書き込み(writeBatch)
+      this.saving = true;
+      try {
+        const batch = writeBatch(db);
+        const [year, month] = yearMonth.split('-');
+        const scheduledDate = `${year}-${month}-01`;
+
+        targets.forEach(s => {
+          const ref = doc(collection(db, 'subscription_payments'));
+          batch.set(ref, {
+            subscriptionId: s.id,
+            customerName: s.customerName,
+            customerId: s.customerId || null,
+            yearMonth: yearMonth,
+            scheduledDate: scheduledDate,
+            paidDate: null,
+            amount: s.monthlyAmount,
+            status: 'pending',    
     // ===== /v0.9 サブスクヘルパー関数 =====
     emptyPurchase() {
       return {
