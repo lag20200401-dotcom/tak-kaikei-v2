@@ -5592,6 +5592,27 @@ function app() {
             paidDate: null,
             amount: s.monthlyAmount,
             status: 'pending',    
+            paymentMethod: 'スクエア',
+            note: '',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        });
+
+        await batch.commit();
+        this.subscriptionMessage = `${targets.length} 件の請求を生成しました(合計 ¥${total.toLocaleString()})`;
+        this.subscriptionMessageType = 'ok';
+        setTimeout(() => this.subscriptionMessage = '', 5000);
+      } catch (e) {
+        console.error(e);
+        this.subscriptionMessage = '生成エラー: ' + e.message;
+        this.subscriptionMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    // ===== /v0.9.0-a2 月次払い込み記録 =====
     // ===== /v0.9 サブスクヘルパー関数 =====
     emptyPurchase() {
       return {
