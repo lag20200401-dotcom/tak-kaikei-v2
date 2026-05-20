@@ -2570,7 +2570,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp,
+  onSnapshot, query, where, orderBy, serverTimestamp,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 // Firebase 設定
@@ -2591,7 +2591,7 @@ const db = initializeFirestore(fbApp, {
 // グローバルに公開(Alpine から使うため)
 window._fb = {
   db, collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp,
+  onSnapshot, query, where, orderBy, serverTimestamp,
   writeBatch
 };
 
