@@ -5607,14 +5607,40 @@ function app() {
         this.saving = false;
       }
     },
-    async deleteSubscription(s) {
+   async deleteSubscription(s) {
       const label = `${s.customerName} / ${s.planType === 'subsc_square' ? 'スクエア' : 'ライフ'} ${s.units}口 ¥${(s.monthlyAmount||0).toLocaleString()}/月`;
-      if (!confirm(`サブスク契約を削除します:\n\n${label}\n\nこの操作は取り消せません。よろしいですか?`)) return;
-      const { db, doc, deleteDoc } = window._fb;
+      const { db, collection, doc, deleteDoc, query, where, getDocs, writeBatch, serverTimestamp } = window._fb;
+
+      // 紐付く未払い payment を取得
+      const pendingSnap = await getDocs(
+        query(collection(db, 'subscription_payments'),
+          where('subscriptionId', '==', s.id),
+          where('status', '==', 'pending'))
+      );
+      const pendingCount = pendingSnap.size;
+
+      const msg = pendingCount > 0
+        ? `サブスク契約を削除します:\n\n${label}\n\n⚠️ 紐付く未払いの請求が ${pendingCount} 件あります。\n契約と一緒に削除されます。\n\nこの操作は取り消せません。よろしいですか?`
+        : `サブスク契約を削除します:\n\n${label}\n\nこの操作は取り消せません。よろしいですか?`;
+
+      if (!confirm(msg)) return;
+
+      this.saving = true;
       try {
-        await deleteDoc(doc(db, 'subscriptions', s.id));
+        const batch = writeBatch(db);
+        batch.delete(doc(db, 'subscriptions', s.id));
+        pendingSnap.docs.forEach(d => batch.delete(doc(db, 'subscription_payments', d.id)));
+        await batch.commit();
+
+        this.subscriptionMessage = pendingCount > 0
+          ? `契約を削除しました(未払い ${pendingCount} 件も削除)`
+          : '契約を削除しました';
+        this.subscriptionMessageType = 'ok';
+        setTimeout(() => this.subscriptionMessage = '', 4000);
       } catch (err) {
         alert('削除エラー: ' + err.message);
+      } finally {
+        this.saving = false;
       }
     },
 
