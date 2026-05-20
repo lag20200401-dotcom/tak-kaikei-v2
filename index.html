@@ -5451,7 +5451,36 @@ function app() {
           customerName: (s.customerName || '').trim(),
           customerId: s.customerId || null,
           planType: s.planType,
-          unitAmount: unit
+          unitAmount: unitAmount,
+          units: units,
+          monthlyAmount: monthlyAmount,
+          paymentMethod: s.paymentMethod,
+          startDate: s.startDate,
+          endDate: s.endDate || null,
+          status: s.status || 'active',
+          billingDay: s.planType === 'subsc_square' ? 1 : null,
+          note: s.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (isNew) subData.createdAt = serverTimestamp();
+
+        // writeBatch で書き込み(現状は契約マスター1件のみ)
+        const batch = writeBatch(db);
+        batch.set(subRef, subData, { merge: !isNew });
+        await batch.commit();
+
+        this.subscriptionMessage = isNew ? '追加しました' : '更新しました';
+        this.subscriptionMessageType = 'ok';
+        this.resetSubscriptionForm();
+        setTimeout(() => this.subscriptionMessage = '', 2500);
+      } catch (e) {
+        console.error(e);
+        this.subscriptionMessage = 'エラー: ' + e.message;
+        this.subscriptionMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
     async deleteSubscription(s) {
       const label = `${s.customerName} / ${s.planType === 'subsc_square' ? 'スクエア' : 'ライフ'} ${s.units}口 ¥${(s.monthlyAmount||0).toLocaleString()}/月`;
       if (!confirm(`サブスク契約を削除します:\n\n${label}\n\nこの操作は取り消せません。よろしいですか?`)) return;
