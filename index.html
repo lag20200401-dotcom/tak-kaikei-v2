@@ -2016,8 +2016,19 @@
                 </td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="p.paidDate || '-'"></td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="p.note || ''"></td>
-                <td class="px-3 py-2 text-right text-xs text-slate-400 whitespace-nowrap">
-                  <!-- ④-B で paid/取消ボタン追加予定 -->
+                <td class="px-3 py-2 text-right whitespace-nowrap">
+                  <button x-show="p.status === 'pending'"
+                          @click="markAsPaid(p)"
+                          :disabled="saving"
+                          class="text-xs px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded">
+                    入金済にする
+                  </button>
+                  <button x-show="p.status === 'paid'"
+                          @click="markAsPending(p)"
+                          :disabled="saving"
+                          class="text-xs text-slate-500 hover:underline">
+                    取消
+                  </button>
                 </td>
               </tr>
             </template>
@@ -5499,6 +5510,54 @@ function app() {
           + (firstPaymentGenerated ? ' / 初回払い込み記録も生成' : '');
         this.subscriptionMessageType = 'ok';
         this.resetSubscriptionForm();
+        setTimeout(() => this.subscriptionMessage = '', 3000);
+      } catch (e) {
+        console.error(e);
+        this.subscriptionMessage = 'エラー: ' + e.message;
+        this.subscriptionMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+    // 🆕 v0.9.0-b3: 個別 paid 化(未入金 → 入金済)
+    async markAsPaid(p) {
+      const { db, doc, writeBatch, serverTimestamp } = window._fb;
+      this.saving = true;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'subscription_payments', p.id), {
+          status: 'paid',
+          paidDate: this.todayStr(),
+          updatedAt: serverTimestamp()
+        });
+        await batch.commit();
+        this.subscriptionMessage = `${p.customerName} を入金済にしました`;
+        this.subscriptionMessageType = 'ok';
+        setTimeout(() => this.subscriptionMessage = '', 3000);
+      } catch (e) {
+        console.error(e);
+        this.subscriptionMessage = 'エラー: ' + e.message;
+        this.subscriptionMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    // 🆕 v0.9.0-b3: 個別 paid 取消(入金済 → 未入金)
+    async markAsPending(p) {
+      if (!confirm(`${p.customerName} の入金を取り消しますか?`)) return;
+      const { db, doc, writeBatch, serverTimestamp } = window._fb;
+      this.saving = true;
+      try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'subscription_payments', p.id), {
+          status: 'pending',
+          paidDate: null,
+          updatedAt: serverTimestamp()
+        });
+        await batch.commit();
+        this.subscriptionMessage = `${p.customerName} を未入金に戻しました`;
+        this.subscriptionMessageType = 'ok';
         setTimeout(() => this.subscriptionMessage = '', 3000);
       } catch (e) {
         console.error(e);
