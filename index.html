@@ -1955,7 +1955,11 @@
           class="px-4 py-1.5 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm rounded">
           この月の請求を生成
         </button>
-        <span class="text-xs text-slate-500 ml-auto">アクティブなスクエア契約者の請求を一括生成します</span>
+       <button @click="markAllAsPaid()"
+          :disabled="saving || paymentSummary.pending === 0"
+          class="ml-auto px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-sm rounded">
+          全員入金済にする(<span x-text="paymentSummary.pending"></span>件)
+        </button>
       </div>
 
       <!-- サマリー -->
@@ -5542,7 +5546,43 @@ function app() {
         this.saving = false;
       }
     },
+// 🆕 v0.9.0-b4: 月単位で未入金を一括 paid 化
+    async markAllAsPaid() {
+      const pendings = this.filteredPayments.filter(p => p.status === 'pending');
+      if (pendings.length === 0) {
+        alert('入金待ちの請求がありません');
+        return;
+      }
+      const total = pendings.reduce((s, p) => s + (p.amount || 0), 0);
+      if (!confirm(
+        `${this.paymentTargetMonth} の未入金 ${pendings.length} 件\n` +
+        `(¥${total.toLocaleString()})を全て入金済にしますか?`
+      )) return;
 
+      const { db, doc, writeBatch, serverTimestamp } = window._fb;
+      this.saving = true;
+      try {
+        const today = this.todayStr();
+        const batch = writeBatch(db);
+        pendings.forEach(p => {
+          batch.update(doc(db, 'subscription_payments', p.id), {
+            status: 'paid',
+            paidDate: today,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+        this.subscriptionMessage = `${pendings.length} 件を入金済にしました(¥${total.toLocaleString()})`;
+        this.subscriptionMessageType = 'ok';
+        setTimeout(() => this.subscriptionMessage = '', 4000);
+      } catch (e) {
+        console.error(e);
+        this.subscriptionMessage = 'エラー: ' + e.message;
+        this.subscriptionMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
     // 🆕 v0.9.0-b3: 個別 paid 取消(入金済 → 未入金)
     async markAsPending(p) {
       if (!confirm(`${p.customerName} の入金を取り消しますか?`)) return;
