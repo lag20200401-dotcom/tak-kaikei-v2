@@ -2003,6 +2003,7 @@
               <th class="px-3 py-2 text-left">予定日</th>
               <th class="px-3 py-2 text-center">状態</th>
               <th class="px-3 py-2 text-left">入金日</th>
+              <th class="px-3 py-2 text-center">月内来院</th>
               <th class="px-3 py-2 text-left">備考</th>
               <th class="px-3 py-2"></th>
             </tr>
@@ -2019,6 +2020,21 @@
                         x-text="p.status==='paid' ? '✅ 入金済' : '⏳ 未入金'"></span>
                 </td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="p.paidDate || '-'"></td>
+                <td class="px-3 py-2 text-xs text-center"
+                    :class="subscUsageColor((visitCountsByCustomerForMonth[p.customerName]?.count || 0), p.status)">
+                  <template x-if="(visitCountsByCustomerForMonth[p.customerName]?.count || 0) === 0 && p.status === 'paid'">
+                    <span>⚠️ 0回</span>
+                  </template>
+                  <template x-if="(visitCountsByCustomerForMonth[p.customerName]?.count || 0) === 0 && p.status !== 'paid'">
+                    <span>0回</span>
+                  </template>
+                  <template x-if="(visitCountsByCustomerForMonth[p.customerName]?.count || 0) === 1">
+                    <span>✅ 1回</span>
+                  </template>
+                  <template x-if="(visitCountsByCustomerForMonth[p.customerName]?.count || 0) >= 2">
+                    <span x-text="'🔁 ' + visitCountsByCustomerForMonth[p.customerName].count + '回'"></span>
+                  </template>
+                </td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="p.note || ''"></td>
                 <td class="px-3 py-2 text-right whitespace-nowrap">
                   <button x-show="p.status === 'pending'"
@@ -5659,6 +5675,29 @@ function app() {
         });
     },
 
+    // 🆕 v0.9.0-d: 月内サブスク利用回数を顧客名ごとに集計
+    get visitCountsByCustomerForMonth() {
+      const ym = this.paymentTargetMonth;
+      if (!ym) return {};
+      const counts = {};
+      for (const v of this.visits) {
+        if (!(v.date || '').startsWith(ym)) continue;
+        if (v.paymentMethod !== 'サブスク利用') continue;
+        const name = v.customerName || '';
+        if (!counts[name]) counts[name] = { count: 0, dates: [] };
+        counts[name].count++;
+        counts[name].dates.push(v.date);
+      }
+      return counts;
+    },
+
+    // 🆕 v0.9.0-d: 月内来院の表示色クラス
+    subscUsageColor(count, status) {
+      if (status !== 'paid') return 'text-slate-400';
+      if (count === 0) return 'text-amber-600 font-bold';
+      if (count === 1) return 'text-emerald-600 font-medium';
+      return 'text-blue-600 font-medium';
+    },
     // サマリー(件数・金額)
     get paymentSummary() {
       const list = this.filteredPayments;
