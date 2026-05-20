@@ -5429,7 +5429,10 @@ function app() {
         this.subscriptionMessageType = 'err';
         return;
       }
-      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      // 🆕 v0.9.0-b1: writeBatch 化(setDoc → batch.set)
+      // 3a の段階では契約マスター1件のみのバッチ。
+      // 3b 以降で初回 payment 自動生成・解約時 pending 削除を同じバッチに追加予定。
+      const { db, collection, doc, writeBatch, serverTimestamp } = window._fb;
       this.saving = true;
       this.subscriptionMessage = '';
 
@@ -5438,43 +5441,17 @@ function app() {
         const unitAmount = Number(s.unitAmount) || 8800;
         const units = Number(s.units) || 1;
         const monthlyAmount = unitAmount * units;
+        const isNew = !s.id;
 
-        const ref = s.id
-          ? doc(db, 'subscriptions', s.id)
-          : doc(collection(db, 'subscriptions'));
+        const subRef = isNew
+          ? doc(collection(db, 'subscriptions'))
+          : doc(db, 'subscriptions', s.id);
 
-        const data = {
+        const subData = {
           customerName: (s.customerName || '').trim(),
           customerId: s.customerId || null,
           planType: s.planType,
-          unitAmount: unitAmount,
-          units: units,
-          monthlyAmount: monthlyAmount,
-          paymentMethod: s.paymentMethod,
-          startDate: s.startDate,
-          endDate: s.endDate || null,
-          status: s.status || 'active',
-          billingDay: s.planType === 'subsc_square' ? 1 : null,
-          note: s.note || '',
-          updatedAt: serverTimestamp()
-        };
-        if (!s.id) data.createdAt = serverTimestamp();
-
-        await setDoc(ref, data, { merge: true });
-
-        this.subscriptionMessage = s.id ? '更新しました' : '追加しました';
-        this.subscriptionMessageType = 'ok';
-        this.resetSubscriptionForm();
-        setTimeout(() => this.subscriptionMessage = '', 2500);
-      } catch (e) {
-        console.error(e);
-        this.subscriptionMessage = 'エラー: ' + e.message;
-        this.subscriptionMessageType = 'err';
-      } finally {
-        this.saving = false;
-      }
-    },
-
+          unitAmount: unit
     async deleteSubscription(s) {
       const label = `${s.customerName} / ${s.planType === 'subsc_square' ? 'スクエア' : 'ライフ'} ${s.units}口 ¥${(s.monthlyAmount||0).toLocaleString()}/月`;
       if (!confirm(`サブスク契約を削除します:\n\n${label}\n\nこの操作は取り消せません。よろしいですか?`)) return;
