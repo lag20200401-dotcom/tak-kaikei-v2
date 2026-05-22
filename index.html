@@ -4917,7 +4917,7 @@ function app() {
       return false;
     },
 
-    // 顧客のアクティブチケットを取得(古い購入日順)
+   // 顧客のアクティブチケットを取得(古い購入日順)
     getActiveTicketsForCustomer(customerName) {
       if (!customerName) return [];
       return this.tickets
@@ -4926,6 +4926,27 @@ function app() {
         .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || ''));
     },
 
+    // 🆕 v0.9.1: 編集中の券の利用履歴(visits由来)
+    // 同じ顧客 × 同じ適用区分 の visits を購入日〜期限日の範囲で取得
+    getEditingTicketHistory() {
+      const t = this.ticketForm;
+      if (!t || !t.id || !t.customerName) return [];
+      const am = t.applicableMenu || 'seitai';
+      const purchase = t.purchaseDate || '';
+      const expiry = t.expiryDate || '';
+      return this.visits
+        .filter(v => {
+          if (v.customerName !== t.customerName) return false;
+          if (v.paymentMethod !== '回数券消化') return false;
+          const vd = v.date || '';
+          if (purchase && vd < purchase) return false;
+          if (expiry && vd > expiry) return false;
+          const vc = this.getMenuCategory(v.menu || '');
+          if (am === 'all') return true;
+          return vc === am;
+        })
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    },
     // === チケット保存(手動) ===
     canSaveTicket() {
       const t = this.ticketForm;
