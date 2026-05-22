@@ -2354,6 +2354,53 @@
         <span class="font-bold"
               x-text="'¥' + (((ticketForm.totalCount || 0) - (ticketForm.usedCount || 0)) * (ticketForm.unitPrice || 0)).toLocaleString()"></span>
       </div>
+
+      <!-- 🆕 v0.9.1: 利用履歴セクション(編集時のみ表示) -->
+      <div x-show="ticketForm.id" class="md:col-span-12 mt-2">
+        <h4 class="text-sm font-bold text-slate-700 mb-2">📋 利用履歴(visits由来)</h4>
+        <template x-if="getEditingTicketHistory().length === 0">
+          <div class="bg-slate-50 rounded p-3 text-xs text-slate-500">
+            visits 由来の利用記録はありません。
+            <span x-show="(ticketForm.usedCount || 0) > 0" class="text-amber-600">
+              (使用済 <span x-text="ticketForm.usedCount"></span>回 はすべて移行前の記録です)
+            </span>
+          </div>
+        </template>
+        <template x-if="getEditingTicketHistory().length > 0">
+          <div class="border border-slate-200 rounded overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 text-slate-600">
+                <tr>
+                  <th class="px-2 py-1 text-left">#</th>
+                  <th class="px-2 py-1 text-left">日付</th>
+                  <th class="px-2 py-1 text-left">メニュー</th>
+                  <th class="px-2 py-1 text-left">担当</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="(v, idx) in getEditingTicketHistory()" :key="v.id">
+                  <tr class="border-t border-slate-100">
+                    <td class="px-2 py-1 text-slate-400" x-text="idx + 1"></td>
+                    <td class="px-2 py-1 whitespace-nowrap" x-text="v.date"></td>
+                    <td class="px-2 py-1" x-text="v.menu"></td>
+                    <td class="px-2 py-1" x-text="v.staff"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="bg-slate-50 px-2 py-1 text-xs text-slate-600 border-t border-slate-200">
+              visits由来: <span class="font-bold" x-text="getEditingTicketHistory().length"></span>件
+              / 使用済: <span class="font-bold" x-text="ticketForm.usedCount || 0"></span>回
+              / 残: <span class="font-bold text-emerald-700"
+                       x-text="((ticketForm.totalCount || 0) - (ticketForm.usedCount || 0))"></span>回
+              <span x-show="getEditingTicketHistory().length !== (ticketForm.usedCount || 0)"
+                    class="text-amber-600 ml-1">
+                ※ visits件数と使用済が一致しない場合、差分は移行前の記録です
+              </span>
+            </div>
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- メッセージ -->
