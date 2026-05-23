@@ -135,6 +135,61 @@
           </div>
         </div>
 
+        <!-- 🆕 v0.9.2: 選択中顧客の保有券・サブスク情報バナー -->
+        <div x-show="visitForm.customerName && visitForm.customerName.trim()"
+             class="md:col-span-12 -mt-1">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs space-y-1">
+            <!-- 保有券 -->
+            <template x-if="getVisitFormCustomerTickets().length === 0">
+              <div class="text-slate-500">🎟️ 保有券: なし</div>
+            </template>
+            <template x-if="getVisitFormCustomerTickets().length > 0">
+              <div>
+                <div>
+                  <span class="font-bold text-slate-700">🎟️ 保有券:</span>
+                  <template x-for="t in getVisitFormCustomerTickets()" :key="t.id">
+                    <span class="inline-block ml-2 px-2 py-0.5 bg-white rounded border border-blue-200">
+                      <span x-text="t.ticketType"></span>
+                      <span class="font-bold text-emerald-700" x-text="' 残' + (t.remainingCount || 0) + '回'"></span>
+                      <span class="text-slate-500" x-text="'(' + applicableMenuLabel(t.applicableMenu) + ')'"></span>
+                      <span class="text-slate-400" x-text="' 期限' + (t.expiryDate || '-')"></span>
+                      <span x-show="t.isLegacy" class="ml-1 text-purple-600">Legacy</span>
+                    </span>
+                  </template>
+                </div>
+                <!-- 🆕 v0.9.2: クイック消化ボタン群 -->
+                <div class="mt-1 flex flex-wrap gap-1">
+                  <template x-for="t in getVisitFormCustomerTickets()" :key="'btns-' + t.id">
+                    <template x-for="menuName in getApplicableConsumeMenus(t.applicableMenu)" :key="t.id + '-' + menuName">
+                      <button type="button"
+                              @click="applyMenuPreset(menuName)"
+                              class="px-2 py-0.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded">
+                        ↓ <span x-text="menuName"></span>
+                      </button>
+                    </template>
+                  </template>
+                </div>
+              </div>
+            </template>
+            <!-- サブスク -->
+            <template x-if="getVisitFormCustomerSubscriptions().length === 0">
+              <div class="text-slate-500">💳 サブスク: なし</div>
+            </template>
+            <template x-if="getVisitFormCustomerSubscriptions().length > 0">
+              <div>
+                <span class="font-bold text-slate-700">💳 サブスク:</span>
+                <template x-for="s in getVisitFormCustomerSubscriptions()" :key="s.id">
+                  <span class="inline-block ml-2 px-2 py-0.5 bg-white rounded border border-purple-200">
+                    <span x-text="s.planType === 'subsc_square' ? 'スクエア' : 'ライフ'"></span>
+                    <span x-text="' ' + s.units + '口 ¥' + (s.monthlyAmount || 0).toLocaleString() + '/月'"></span>
+                  </span>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+        </div>
+
        <!-- メニュー(プルダウン+自由入力ハイブリッド) v0.6.5 -->
         <div class="md:col-span-3">
           <label class="block text-xs text-slate-600 mb-1">メニュー *</label>
@@ -4993,6 +5048,40 @@ function app() {
           return vc === am;
         })
         .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    },
+
+    // 🆕 v0.9.2: 来院記録フォーム選択中の顧客が保有する有効券一覧
+    getVisitFormCustomerTickets() {
+      const name = (this.visitForm.customerName || '').trim();
+      if (!name) return [];
+      return this.tickets
+        .filter(t => t.customerName === name)
+        .filter(t => this.getTicketStatus(t) === 'active')
+        .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || ''));
+    },
+
+    // 🆕 v0.9.2: 来院記録フォーム選択中の顧客が保有するアクティブサブスク契約一覧
+    getVisitFormCustomerSubscriptions() {
+      const name = (this.visitForm.customerName || '').trim();
+      if (!name) return [];
+      return this.subscriptions
+        .filter(s => s.customerName === name)
+        .filter(s => s.status === 'active');
+    },
+
+    // 🆕 v0.9.2: 適用区分に対応する「回数券消化」プリセット名の一覧
+    // 'seitai'      → 整体・インディバ
+    // 'maintenance' → メンテナンス
+    // 'all'         → 全て
+    getApplicableConsumeMenus(applicableMenu) {
+      if (applicableMenu === 'maintenance') {
+        return ['回数券消化(メンテナンス)'];
+      }
+      if (applicableMenu === 'all') {
+        return ['回数券消化(整体)', '回数券消化(インディバ)', '回数券消化(メンテナンス)'];
+      }
+      // 'seitai' or 不明はデフォルトで整体・インディバ
+      return ['回数券消化(整体)', '回数券消化(インディバ)'];
     },
     // === チケット保存(手動) ===
     canSaveTicket() {
