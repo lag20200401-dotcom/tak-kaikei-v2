@@ -135,21 +135,66 @@
           </div>
         </div>
 
-        <!-- 🆕 v0.9.2: 保有券・サブスクバナー(顧客名選択時に表示) -->
+        <!-- 🆕 v0.9.3: 保有券・サブスクバナー + 来院履歴(顧客名選択時に表示) -->
         <div x-show="visitForm.customerName && visitForm.customerName.trim()"
-             class="md:col-span-12 -mt-2 flex flex-wrap gap-1.5 text-xs">
-          <template x-for="t in getActiveTicketsForCustomer(visitForm.customerName)" :key="'banner-tk-' + t.id">
-            <span class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded">
-              🎟️ <span x-text="t.ticketType"></span>
-              残<span class="font-bold" x-text="t.remainingCount"></span>回
+             class="md:col-span-12 -mt-2 space-y-1.5">
+
+          <!-- バナー行(保有券・サブスク) -->
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <template x-for="t in getActiveTicketsForCustomer(visitForm.customerName)" :key="'banner-tk-' + t.id">
+              <span class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded">
+                🎟️ <span x-text="t.ticketType"></span>
+                残<span class="font-bold" x-text="t.remainingCount"></span>回
+              </span>
+            </template>
+            <template x-for="s in subscriptions.filter(s => s.status === 'active' && s.customerName === (visitForm.customerName || '').trim())" :key="'banner-sb-' + s.id">
+              <span class="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 border border-purple-200 text-purple-800 rounded">
+                💳 <span x-text="s.paymentMethod"></span>
+                <span class="font-bold" x-text="s.units + '口'"></span>
+              </span>
+            </template>
+          </div>
+          <!-- 履歴ヘッダー行(前回来院日 + 展開ボタン) -->
+          <div x-show="getCustomerVisitHistory(visitForm.customerName).length > 0"
+               class="flex items-center gap-2 text-xs text-slate-600">
+            <span class="inline-flex items-center gap-1">
+              📅 前回
+              <span class="font-medium" x-text="formatDateWithWeekday(getCustomerVisitHistory(visitForm.customerName)[0]?.date || '')"></span>
+              <span class="text-slate-500" x-text="formatDaysAgo(getCustomerVisitHistory(visitForm.customerName)[0]?.date || '')"></span>
             </span>
-          </template>
-          <template x-for="s in subscriptions.filter(s => s.status === 'active' && s.customerName === (visitForm.customerName || '').trim())" :key="'banner-sb-' + s.id">
-            <span class="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 border border-purple-200 text-purple-800 rounded">
-              💳 <span x-text="s.paymentMethod"></span>
-              <span class="font-bold" x-text="s.units + '口'"></span>
-            </span>
-          </template>
+            <button type="button"
+                    @click="visitHistoryOpen = !visitHistoryOpen"
+                    class="text-teal-700 hover:underline">
+              <span x-show="!visitHistoryOpen">▼ 履歴</span>
+              <span x-show="visitHistoryOpen">▲ 閉じる</span>
+            </button>
+          </div>
+
+          <!-- 履歴テーブル(展開時のみ表示) -->
+          <div x-show="visitHistoryOpen && getCustomerVisitHistory(visitForm.customerName).length > 0"
+               class="border border-slate-200 rounded overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 text-slate-600">
+                <tr>
+                  <th class="px-2 py-1 text-left">日付</th>
+                  <th class="px-2 py-1 text-left">メニュー</th>
+                  <th class="px-2 py-1 text-right">金額</th>
+                  <th class="px-2 py-1 text-left">担当</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="h in getCustomerVisitHistory(visitForm.customerName)" :key="'hist-' + h.id">
+                  <tr class="border-t border-slate-100">
+                    <td class="px-2 py-1 whitespace-nowrap" x-text="formatDateWithWeekday(h.date)"></td>
+                    <td class="px-2 py-1" x-text="h.menu"></td>
+                    <td class="px-2 py-1 text-right text-slate-600" x-text="(h.amount > 0) ? ('¥' + h.amount.toLocaleString()) : '-'"></td>
+                    <td class="px-2 py-1 text-slate-600" x-text="h.staff"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
         </div>
         
        <!-- メニュー(プルダウン+自由入力ハイブリッド) v0.6.5 -->
