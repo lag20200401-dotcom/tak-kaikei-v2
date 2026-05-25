@@ -2779,6 +2779,7 @@ function app() {
     visitMessageType: 'ok',
     visitFilterMonth: '',
     showSuggest: false,
+    visitHistoryOpen: false,  // 🆕 v0.9.3: 来院履歴の展開状態
 
     // ===== 商品フォーム =====
     productModalOpen: false,
@@ -4990,6 +4991,33 @@ function app() {
         .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || ''));
     },
 
+    // 🆕 v0.9.3: 顧客の来院履歴(直近10件、新しい順)
+    getCustomerVisitHistory(customerName) {
+      if (!customerName) return [];
+      const name = customerName.trim();
+      if (!name) return [];
+      return this.visits
+        .filter(v => v.customerName === name)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+        .slice(0, 10);
+    },
+
+    // 🆕 v0.9.3: 経過日数を「N日前」「1週間前」「3ヶ月前」形式で返す
+    formatDaysAgo(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      const today = new Date(this.todayStr());
+      if (isNaN(d.getTime())) return '';
+      const diffDays = Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) return '未来';
+      if (diffDays === 0) return '本日';
+      if (diffDays === 1) return '昨日';
+      if (diffDays < 7) return diffDays + '日前';
+      if (diffDays < 30) return Math.floor(diffDays / 7) + '週間前';
+      if (diffDays < 365) return Math.floor(diffDays / 30) + 'ヶ月前';
+      return Math.floor(diffDays / 365) + '年前';
+    },
+    
     // 🆕 v0.9.1: 編集中の券の利用履歴(visits由来)
     // 同じ顧客 × 同じ適用区分 の visits を購入日〜期限日の範囲で取得
     getEditingTicketHistory() {
