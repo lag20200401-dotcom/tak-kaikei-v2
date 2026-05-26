@@ -204,7 +204,7 @@
             class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-teal-50 mb-1 cursor-pointer">
             <option value="">📋 プリセットから選択...</option>
             <template x-for="preset in MENU_PRESETS" :key="preset.name">
-              <option :value="preset.name" x-text="preset.name + ' (¥' + preset.amount.toLocaleString() + ')'"></option>
+              <option :value="preset.name" x-text="preset.amount !== null ? (preset.name + ' (¥' + preset.amount.toLocaleString() + ')') : (preset.name + ' (金額入力)')"></option>
             </template>
           </select>
           <input type="text" x-model="visitForm.menu"
@@ -2776,6 +2776,13 @@ function app() {
       { name: '回数券購入整体10回',             amount: 104500, paymentMethod: '現金'       },
       { name: '回数券購入整体20回',             amount: 198000, paymentMethod: '現金'       },
       { name: '回数券購入整体30回',             amount: 280500, paymentMethod: '現金'       },
+      // ── 🆕 v0.9.4 (フェーズ1-1): 月次レポート対応メニュー ──
+      { name: 'サブスク(都度)',               amount: 8800,   paymentMethod: 'ライフ'     },
+      { name: 'ダイエットプログラム3ヶ月',      amount: 330000, paymentMethod: 'ライフ'     },
+      { name: 'ダイエットプログラム1ヶ月',      amount: 138000, paymentMethod: 'ライフ'     },
+      { name: 'ダイエットモニター',             amount: 198000, paymentMethod: 'ライフ'     },
+      { name: '返金(回数券)',                 amount: null,   paymentMethod: '現金'       },
+      { name: '返金(サブスク)',               amount: null,   paymentMethod: '現金'       },
     ],
     // 経費・広告費用(v0.4)
     expensePaymentMethods: ['現金', 'カード', '銀行振込', 'PayPay', 'その他'],
