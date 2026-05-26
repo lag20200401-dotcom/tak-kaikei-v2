@@ -2706,14 +2706,15 @@
 <!-- ===== Firebase + アプリロジック ===== -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  collection, doc, getDoc, getDocs, setDoc, deleteDoc,
-  onSnapshot, query, where, orderBy, serverTimestamp,
-  writeBatch
-} from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import {
+      initializeFirestore,
+      persistentLocalCache,
+      persistentMultipleTabManager,
+      collection, doc, getDoc, getDocs, setDoc, deleteDoc,
+      onSnapshot, query, where, orderBy, serverTimestamp,
+      writeBatch
+    } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 // Firebase 設定
 const firebaseConfig = {
   apiKey: "AIzaSyAIzljpQd7ssjQJCpBrhQ1djPxmpTfDISU",
@@ -2728,6 +2729,25 @@ const fbApp = initializeApp(firebaseConfig);
 const db = initializeFirestore(fbApp, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
+
+  // ===== 匿名認証 =====
+    const auth = getAuth(fbApp);
+    const authReadyPromise = new Promise((resolve) => {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          console.log('[Auth] 匿名サインイン完了 uid:', user.uid);
+          resolve(user);
+        } else {
+          console.log('[Auth] サインイン試行中...');
+          signInAnonymously(auth).catch((err) => {
+            console.error('[Auth] 匿名サインイン失敗:', err);
+            alert('認証エラーが発生しました。ページを再読み込みしてください。\n\n' + err.message);
+          });
+        }
+      });
+    });
+    // 認証完了を待つ
+    await authReadyPromise;
 
 // グローバルに公開(Alpine から使うため)
 window._fb = {
