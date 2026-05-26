@@ -253,6 +253,22 @@
           <input type="text" x-model="visitForm.note" placeholder="任意"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
+
+        <!-- 🆕 v0.9.4 (フェーズ1-2): 物販(任意) -->
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-600 mb-1">
+            物販金額 <span class="text-slate-400">(任意)</span>
+          </label>
+          <input type="number" x-model.number="visitForm.retailAmount" placeholder="0"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div class="md:col-span-9">
+          <label class="block text-xs text-slate-600 mb-1">
+            物販メモ <span class="text-slate-400">(任意)</span>
+          </label>
+          <input type="text" x-model="visitForm.retailMemo" placeholder="例: NMN×1, TeraVita×2"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
       </div>
 
       <!-- 保存ボタン -->
@@ -3229,7 +3245,9 @@ function app() {
         amount: 0,
         staff: 'TAK',
         paymentMethod: '現金',
-        note: ''
+        note: '',
+        retailAmount: 0,
+        retailMemo: ''
       };
     },
     resetVisitForm() {
@@ -3374,6 +3392,8 @@ function app() {
           paymentMethod: v.paymentMethod,
           cashbookCategory: cat,
           note: v.note || '',
+          retailAmount: Number(v.retailAmount) || 0,
+          retailMemo: (v.retailMemo || '').trim(),
           updatedAt: serverTimestamp()
         };
         if (!v.id) data.createdAt = serverTimestamp();
