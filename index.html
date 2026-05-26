@@ -2820,6 +2820,7 @@ function app() {
     tickets: [],        // 🆕 v0.8 回数券データ
     subscriptions: [],  // 🆕 v0.9 サブスク契約マスター
     subscriptionPayments: [],  // 🆕 v0.9.0-a1 サブスク月次払い込み記録
+    inquiries: [],             // 🆕 v0.9.4-4A (フェーズ1-4): 問い合わせ記録
 
     // 🆕 v0.8: 回数券種別マスター(購入時のテンプレ)
     TICKET_TYPES: {
@@ -2978,6 +2979,27 @@ function app() {
     legacyImporting: false,
     legacyImportProgress: '',
 
+    // ===== 🆕 v0.9.4-4A (フェーズ1-4): 問い合わせフォーム =====
+    inquiryForm: {
+      id: null,
+      date: '',
+      customerName: '',
+      source: '紹介',
+      channel: '電話',
+      status: 'new',
+      bookedDate: null,
+      firstVisitDate: null,
+      lostReason: '',
+      note: ''
+    },
+    inquiryMessage: '',
+    inquiryMessageType: 'ok',
+    inquiryFilterMonth: '',
+    inquiryFilterStatus: '',
+    inquirySources: ['紹介', 'Instagram広告', '折込チラシ', 'LINEリッチメニュー', 'GoogleMap', 'ポスティング', 'その他'],
+    inquiryChannels: ['電話', 'LP', 'LINE', '来店直接', 'その他'],
+    inquiryStatuses: ['new', 'contacted', 'booked', 'visited', 'lost'],
+
     // ===== 🆕 v0.7: 仕入フォーム =====
     purchaseForm: {
       id: null,
@@ -3011,6 +3033,7 @@ function app() {
       this.depositForm = this.emptyDeposit();
       this.purchaseForm = this.emptyPurchase();
       this.ticketForm = this.emptyTicket();
+      this.inquiryForm = this.emptyInquiry();  // 🆕 v0.9.4-4A
       this.visitFilterMonth = this.currentMonthStr();
       this.salesFilterMonth = this.currentMonthStr();
       this.expenseFilterMonth = this.currentMonthStr();
@@ -3132,6 +3155,12 @@ function app() {
         this.subscriptionPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error('subscription_payments購読エラー:', err); this.cloudStatus = '接続エラー'; });
       this.unsubscribers.push(u11);
+
+      // 🆕 v0.9.4-4A (フェーズ1-4): 問い合わせ記録の購読(日付降順)
+      const u12 = onSnapshot(query(collection(db, 'inquiries'), orderBy('date', 'desc')), snap => {
+        this.inquiries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('inquiries購読エラー:', err); this.cloudStatus = '接続エラー'; });
+      this.unsubscribers.push(u12);
     },
 
     // 🆕 v0.6.4: 全リスナー停止
@@ -5997,6 +6026,22 @@ function app() {
 
     // ===== /v0.9.0-a2 月次払い込み記録 =====
     // ===== /v0.9 サブスクヘルパー関数 =====
+    // 🆕 v0.9.4-4A (フェーズ1-4): 問い合わせフォームの空オブジェクト
+    emptyInquiry() {
+      return {
+        id: null,
+        date: this.todayStr(),
+        customerName: '',
+        source: '紹介',
+        channel: '電話',
+        status: 'new',
+        bookedDate: null,
+        firstVisitDate: null,
+        lostReason: '',
+        note: ''
+      };
+    },
+    
     emptyPurchase() {
       return {
         id: null,
