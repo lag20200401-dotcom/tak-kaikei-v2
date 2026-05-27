@@ -2174,6 +2174,73 @@
       </div>
     </div>
 
+    <!-- フィルタ -->
+    <div class="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap">
+      <label class="text-sm text-slate-600">表示月:</label>
+      <input type="month" x-model="inquiryFilterMonth"
+             class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+      <button @click="inquiryFilterMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+      <button @click="inquiryFilterMonth = ''" class="text-xs text-slate-500 hover:underline">全期間</button>
+      <span class="text-slate-300 mx-1">|</span>
+      <label class="text-sm text-slate-600">状態:</label>
+      <select x-model="inquiryFilterStatus"
+              class="px-3 py-1 border border-slate-300 rounded-lg text-sm bg-white">
+        <option value="">全部</option>
+        <option value="new">新規</option>
+        <option value="contacted">対応中</option>
+        <option value="booked">予約済</option>
+        <option value="visited">来院済</option>
+        <option value="lost">失注</option>
+      </select>
+      <span class="ml-auto text-sm text-slate-600">
+        <span x-text="filteredInquiries.length"></span>件
+      </span>
+    </div>
+
+    <!-- 一覧 -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <div x-show="filteredInquiries.length === 0" class="p-8 text-center text-slate-400 text-sm">
+        該当する問い合わせがありません<br>
+        <span class="text-xs">入力フォームは次回のコミット(4-C)で追加予定です</span>
+      </div>
+      <div x-show="filteredInquiries.length > 0" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 text-slate-600">
+            <tr>
+              <th class="px-3 py-2 text-left">日付</th>
+              <th class="px-3 py-2 text-left">顧客名</th>
+              <th class="px-3 py-2 text-left">流入経路</th>
+              <th class="px-3 py-2 text-left">チャネル</th>
+              <th class="px-3 py-2 text-center">状態</th>
+              <th class="px-3 py-2 text-left">予約日</th>
+              <th class="px-3 py-2 text-left">初回来院日</th>
+              <th class="px-3 py-2 text-left">備考</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="i in filteredInquiries" :key="i.id">
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-3 py-2 whitespace-nowrap" x-text="i.date"></td>
+                <td class="px-3 py-2" x-text="i.customerName || '(未確定)'"></td>
+                <td class="px-3 py-2 text-xs" x-text="i.source"></td>
+                <td class="px-3 py-2 text-xs" x-text="i.channel"></td>
+                <td class="px-3 py-2 text-center">
+                  <span class="text-xs px-2 py-0.5 rounded"
+                        :class="inquiryStatusColor(i.status)"
+                        x-text="inquiryStatusLabel(i.status)"></span>
+                </td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="i.bookedDate || '-'"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="i.firstVisitDate || '-'"></td>
+                <td class="px-3 py-2 text-xs text-slate-600" x-text="i.note || (i.lostReason ? '失注: ' + i.lostReason : '')"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
   <section x-show="currentTab==='export'" class="space-y-4">
 
