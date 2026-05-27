@@ -2137,6 +2137,43 @@
     
   </section>
   
+  <!-- ====== 🆕 v0.9.4-4B: 問い合わせタブ(一覧UI、入力フォームなし) ====== -->
+  <section x-show="currentTab==='inquiries'" class="space-y-4">
+
+    <!-- ヘッダー -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">📞 問い合わせ管理</h2>
+          <p class="text-xs text-slate-500 mt-1">電話・LP・LINE等からの新規問い合わせを記録します。入力フォームは次回追加予定。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- サマリーカード -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">新規</div>
+        <div class="text-2xl font-bold text-blue-600" x-text="inquiryCounts.new"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">対応中</div>
+        <div class="text-2xl font-bold text-amber-600" x-text="inquiryCounts.contacted"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">予約済</div>
+        <div class="text-2xl font-bold text-purple-600" x-text="inquiryCounts.booked"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">来院済</div>
+        <div class="text-2xl font-bold text-emerald-600" x-text="inquiryCounts.visited"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs text-slate-500">失注</div>
+        <div class="text-2xl font-bold text-slate-500" x-text="inquiryCounts.lost"></div>
+      </div>
+    </div>
+
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
   <section x-show="currentTab==='export'" class="space-y-4">
 
