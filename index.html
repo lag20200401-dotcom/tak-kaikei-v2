@@ -4878,22 +4878,26 @@ function app() {
     calcMonthCashSummary(month) {
       let income = 0, expense = 0;
       for (const v of this.visits) {
+        // 売上(来院)は「現金」のみ。「リクルート」は支払方法として現実的にあり得ないので除外
         if ((v.date || '').startsWith(month) && v.paymentMethod === '現金') {
           income += Number(v.amount) || 0;
         }
       }
       for (const s of this.sales) {
+        // 物販売上も同じく「現金」のみ
         if ((s.date || '').startsWith(month) && s.paymentMethod === '現金' && !s.isSample) {
           income += Number(s.amount) || 0;
         }
       }
       for (const e of this.expenses) {
-        if ((e.date || '').startsWith(month) && e.paymentMethod === '現金') {
+        // 経費は「現金」「リクルート」の両方を現金扱いに含める(v0.9.4-fix)
+        if ((e.date || '').startsWith(month) && this.isCashLikePayment(e.paymentMethod)) {
           expense += Number(e.amount) || 0;
         }
       }
       for (const a of this.ads) {
-        if ((a.date || '').startsWith(month) && a.paymentMethod === '現金') {
+        // 広告費も同様に「現金」「リクルート」を現金扱いに含める(v0.9.4-fix)
+        if ((a.date || '').startsWith(month) && this.isCashLikePayment(a.paymentMethod)) {
           expense += Number(a.amount) || 0;
         }
       }
@@ -4934,22 +4938,26 @@ function app() {
         }
       }
       for (const e of this.expenses) {
-        if ((e.date || '').startsWith(m) && e.paymentMethod === '現金') {
+        // 「現金」「リクルート」の両方を現金扱いとして出納帳に表示(v0.9.4-fix)
+        if ((e.date || '').startsWith(m) && this.isCashLikePayment(e.paymentMethod)) {
+          const pmTag = e.paymentMethod === 'リクルート' ? ' [リクルート]' : '';
           list.push({
             date: e.date,
             type: '経費',
-            desc: `${e.category}${e.note ? ' / ' + e.note : ''}`,
+            desc: `${e.category}${pmTag}${e.note ? ' / ' + e.note : ''}`,
             income: 0,
             expense: Number(e.amount) || 0
           });
         }
       }
       for (const a of this.ads) {
-        if ((a.date || '').startsWith(m) && a.paymentMethod === '現金') {
+        // 「現金」「リクルート」の両方を現金扱いとして出納帳に表示(v0.9.4-fix)
+        if ((a.date || '').startsWith(m) && this.isCashLikePayment(a.paymentMethod)) {
+          const pmTag = a.paymentMethod === 'リクルート' ? ' [リクルート]' : '';
           list.push({
             date: a.date,
             type: '広告費',
-            desc: `${a.category}${a.note ? ' / ' + a.note : ''}`,
+            desc: `${a.category}${pmTag}${a.note ? ' / ' + a.note : ''}`,
             income: 0,
             expense: Number(a.amount) || 0
           });
@@ -5002,14 +5010,16 @@ function app() {
           incomeMap['物販売上(現金)'] += Number(s.amount) || 0;
         }
       }
-      for (const e of this.expenses) {
-        if ((e.date || '').startsWith(m) && e.paymentMethod === '現金') {
+     for (const e of this.expenses) {
+        // 「現金」「リクルート」の両方を現金扱いとしてカテゴリ集計に含める(v0.9.4-fix)
+        if ((e.date || '').startsWith(m) && this.isCashLikePayment(e.paymentMethod)) {
           const k = e.category || '(未分類)';
           expenseMap[k] = (expenseMap[k] || 0) + (Number(e.amount) || 0);
         }
       }
       for (const a of this.ads) {
-        if ((a.date || '').startsWith(m) && a.paymentMethod === '現金') {
+        // 「現金」「リクルート」の両方を現金扱いとしてカテゴリ集計に含める(v0.9.4-fix)
+        if ((a.date || '').startsWith(m) && this.isCashLikePayment(a.paymentMethod)) {
           const k = `広告費 / ${a.category}`;
           expenseMap[k] = (expenseMap[k] || 0) + (Number(a.amount) || 0);
         }
