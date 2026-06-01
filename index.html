@@ -6626,24 +6626,44 @@ function app() {
         }
       });
 
-      // 経費(現金、その他除外、自動転記サンプル除外) - 伝票No付き
+      // 経費・広告費(現金 or リクルート、自動転記サンプル除外) - 伝票No付き
+      // v0.9.4-fix: リクルート支払も伝票対象に拡張 + 広告費にも伝票No付与
       let receiptCounter = 0;
       const circledNumbers = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩',
                               '⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
+
+      // 経費と広告費を一旦まとめて日付順にソート(伝票No が日付順に並ぶように)
+      const cashLikeTxns = [];
+
       data.expenses
-        .filter(e => e.paymentMethod === '現金' && !e.isAutoSample)
-        .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+        .filter(e => this.isCashLikePayment(e.paymentMethod) && !e.isAutoSample)
         .forEach(e => {
-          const receiptNo = circledNumbers[receiptCounter] || `(${receiptCounter + 1})`;
-          receiptCounter++;
-          const desc = e.note ? `${e.category}(${e.note})` : e.category;
-          txns.push({ date: e.date, type: 'expense', desc, amount: e.amount, receiptNo });
+          const pmTag = e.paymentMethod === 'リクルート' ? '[リクルート]' : '';
+          const baseDesc = e.note ? `${e.category}(${e.note})` : e.category;
+          const desc = pmTag ? `${baseDesc}${pmTag}` : baseDesc;
+          cashLikeTxns.push({ date: e.date, type: 'expense', desc, amount: e.amount, _sortKey: 'A' });
         });
 
-      // 広告費(現金) - 通常はカードなのでほぼ空
-      data.ads.filter(a => a.paymentMethod === '現金').forEach(a => {
-        const desc = a.note ? `広告費(${a.category}/${a.note})` : `広告費(${a.category})`;
-        txns.push({ date: a.date, type: 'expense', desc, amount: a.amount });
+      data.ads
+        .filter(a => this.isCashLikePayment(a.paymentMethod))
+        .forEach(a => {
+          const pmTag = a.paymentMethod === 'リクルート' ? '[リクルート]' : '';
+          const baseDesc = a.note ? `広告費(${a.category}/${a.note})` : `広告費(${a.category})`;
+          const desc = pmTag ? `${baseDesc}${pmTag}` : baseDesc;
+          cashLikeTxns.push({ date: a.date, type: 'expense', desc, amount: a.amount, _sortKey: 'B' });
+        });
+
+      // 日付昇順 → 同日内は経費(A)→広告費(B)の順で伝票No 付与
+      cashLikeTxns.sort((x, y) => {
+        const d = (x.date || '').localeCompare(y.date || '');
+        if (d !== 0) return d;
+        return (x._sortKey || '').localeCompare(y._sortKey || '');
+      });
+
+      cashLikeTxns.forEach(t => {
+        const receiptNo = circledNumbers[receiptCounter] || `(${receiptCounter + 1})`;
+        receiptCounter++;
+        txns.push({ date: t.date, type: t.type, desc: t.desc, amount: t.amount, receiptNo });
       });
 
       // 🆕 銀行預け入れ
