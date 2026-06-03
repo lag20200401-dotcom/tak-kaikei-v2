@@ -2145,10 +2145,70 @@
       <div class="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 class="text-lg font-bold text-slate-800">📞 問い合わせ管理</h2>
-          <p class="text-xs text-slate-500 mt-1">電話・LP・LINE等からの新規問い合わせを記録します。入力フォームは次回追加予定。</p>
+          <p class="text-xs text-slate-500 mt-1">電話・LP・LINE等からの新規問い合わせを記録し、初回流入を顧客マスターに自動反映します。</p>
         </div>
       </div>
     </div>
+
+    <!-- 🆕 v0.9.4-4C: 問い合わせ入力フォーム -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <h3 class="text-sm font-bold text-slate-700 mb-3" x-text="inquiryForm.id ? '✏️ 問い合わせを編集' : '➕ 新規問い合わせを記録'"></h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">問い合わせ日 <span class="text-red-500">*</span></label>
+          <input type="date" x-model="inquiryForm.date" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">顧客名 <span class="text-red-500">*</span></label>
+          <input type="text" x-model="inquiryForm.customerName" placeholder="例: 山田太郎" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">状態 <span class="text-red-500">*</span></label>
+          <select x-model="inquiryForm.status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="s in inquiryStatuses" :key="s"><option :value="s" x-text="inquiryStatusLabel(s)"></option></template>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">流入経路(媒体) <span class="text-red-500">*</span></label>
+          <select x-model="inquiryForm.source" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="s in inquirySources" :key="s"><option :value="s" x-text="s"></option></template>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">問い合わせ方法 <span class="text-red-500">*</span></label>
+          <select x-model="inquiryForm.channel" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+            <template x-for="c in inquiryChannels" :key="c"><option :value="c" x-text="c"></option></template>
+          </select>
+        </div>
+      </div>
+     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">予約日(任意)</label>
+          <input type="date" x-model="inquiryForm.bookedDate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">初回来院日(任意)</label>
+          <input type="date" x-model="inquiryForm.firstVisitDate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div x-show="inquiryForm.status === 'lost'">
+          <label class="block text-xs text-slate-500 mb-1">失注理由</label>
+          <input type="text" x-model="inquiryForm.lostReason" placeholder="例: 料金/距離/日程" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+        <div class="md:col-span-3">
+          <label class="block text-xs text-slate-500 mb-1">備考</label>
+          <input type="text" x-model="inquiryForm.note" placeholder="メモ" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mt-4">
+        <button @click="saveInquiry()" :disabled="saving || !canSaveInquiry()" class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg shadow">
+          <span x-text="inquiryForm.id ? '更新する' : '保存する'"></span>
+        </button>
+        <button x-show="inquiryForm.id" @click="resetInquiryForm()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm rounded-lg">キャンセル</button>
+        <span x-show="inquiryMessage" :class="inquiryMessageType === 'ok' ? 'text-emerald-600' : 'text-red-600'" class="text-sm" x-text="inquiryMessage"></span>
+      </div>
+    </div>
+
+    <!-- サマリーカード -->
 
     <!-- サマリーカード -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -2200,8 +2260,8 @@
     <!-- 一覧 -->
     <div class="bg-white rounded-xl shadow overflow-hidden">
       <div x-show="filteredInquiries.length === 0" class="p-8 text-center text-slate-400 text-sm">
-        該当する問い合わせがありません<br>
-        <span class="text-xs">入力フォームは次回のコミット(4-C)で追加予定です</span>
+       該当する問い合わせがありません<br>
+        <span class="text-xs">上の入力フォームから問い合わせを記録できます</span>
       </div>
       <div x-show="filteredInquiries.length > 0" class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -2215,6 +2275,7 @@
               <th class="px-3 py-2 text-left">予約日</th>
               <th class="px-3 py-2 text-left">初回来院日</th>
               <th class="px-3 py-2 text-left">備考</th>
+              <th class="px-3 py-2 text-center">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -2232,6 +2293,10 @@
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="i.bookedDate || '-'"></td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="i.firstVisitDate || '-'"></td>
                 <td class="px-3 py-2 text-xs text-slate-600" x-text="i.note || (i.lostReason ? '失注: ' + i.lostReason : '')"></td>
+                <td class="px-3 py-2 text-center whitespace-nowrap">
+                  <button @click="editInquiry(i)" class="text-xs px-2 py-1 text-teal-700 hover:bg-teal-50 rounded">編集</button>
+                  <button @click="deleteInquiry(i)" class="text-xs px-2 py-1 text-red-600 hover:bg-red-50 rounded">削除</button>
+                </td>
               </tr>
             </template>
           </tbody>
@@ -6233,6 +6298,110 @@ function app() {
         lostReason: '',
         note: ''
       };
+    },
+// 🆕 v0.9.4-4C: 問い合わせ 入力可否 / フォーム初期化 / 編集 / 削除
+    canSaveInquiry() {
+      const f = this.inquiryForm;
+      return !!(f.date && (f.customerName || '').trim() && f.source && f.channel && f.status);
+    },
+
+    resetInquiryForm() {
+      this.inquiryForm = this.emptyInquiry();
+      this.inquiryMessage = '';
+    },
+
+    editInquiry(i) {
+      this.inquiryForm = {
+        id: i.id, date: i.date || this.todayStr(),
+        customerName: i.customerName || '', source: i.source || '紹介',
+        channel: i.channel || '電話', status: i.status || 'new',
+        bookedDate: i.bookedDate || null, firstVisitDate: i.firstVisitDate || null,
+        lostReason: i.lostReason || '', note: i.note || ''
+      };
+      this.inquiryMessage = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    async deleteInquiry(i) {
+      if (!confirm(`${i.date} ${i.customerName || '(未確定)'} の問い合わせを削除しますか?\n※顧客マスターの初回流入データは削除されません`)) return;
+      const { db, doc, deleteDoc } = window._fb;
+      try {
+        await deleteDoc(doc(db, 'inquiries', i.id));
+        this.inquiryMessage = '削除しました';
+        this.inquiryMessageType = 'ok';
+        setTimeout(() => this.inquiryMessage = '', 2500);
+      } catch (err) {
+        console.error(err);
+        this.inquiryMessage = 'エラー: ' + err.message;
+        this.inquiryMessageType = 'err';
+      }
+    },
+
+    // 🆕 v0.9.4-4C: 問い合わせ保存(inquiries 保存 → 顧客マスター反映)
+    async saveInquiry() {
+      if (!this.canSaveInquiry()) return;
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      this.saving = true;
+      this.inquiryMessage = '';
+      try {
+        const f = this.inquiryForm;
+        const ref = f.id ? doc(db, 'inquiries', f.id) : doc(collection(db, 'inquiries'));
+        const data = {
+          date: f.date,
+          customerName: (f.customerName || '').trim(),
+          source: f.source,
+          channel: f.channel,
+          status: f.status,
+          bookedDate: f.bookedDate || null,
+          firstVisitDate: f.firstVisitDate || null,
+          lostReason: f.lostReason || '',
+          note: f.note || '',
+          updatedAt: serverTimestamp()
+        };
+        if (!f.id) data.createdAt = serverTimestamp();
+        await setDoc(ref, data, { merge: true });
+        await this.applyInquiryAttribution(f);
+        this.inquiryMessage = f.id ? '更新しました' : '保存しました(顧客マスター反映済み)';
+        this.inquiryMessageType = 'ok';
+        this.resetInquiryForm();
+        setTimeout(() => this.inquiryMessage = '', 2800);
+      } catch (err) {
+        console.error(err);
+        this.inquiryMessage = 'エラー: ' + err.message;
+        this.inquiryMessageType = 'err';
+      } finally {
+        this.saving = false;
+      }
+    },
+// 🆕 v0.9.4-4C: 問い合わせ内容を customers_temp の初回流入フィールドに反映
+    //  新規顧客=作成+初回流入5項目を記録 / 既存顧客=未設定の初回流入のみ補完(上書きしない)
+    async applyInquiryAttribution(f) {
+      const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+      const nameKey = (f.customerName || '').trim();
+      if (!nameKey) return;
+      const acqMonth = (f.date || '').slice(0, 7);
+      const existing = this.customersTemp.find(c => c.name === nameKey);
+      if (existing) {
+        const patch = {};
+        if (!existing.firstSource)      patch.firstSource = f.source;
+        if (!existing.firstChannel)     patch.firstChannel = f.channel;
+        if (!existing.firstInquiryDate) patch.firstInquiryDate = f.date;
+        if (!existing.acquisitionMonth) patch.acquisitionMonth = acqMonth;
+        if (f.firstVisitDate && !existing.firstVisitDate) patch.firstVisitDate = f.firstVisitDate;
+        if (Object.keys(patch).length === 0) return;
+        await setDoc(doc(db, 'customers_temp', existing.id), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+        this.upsertCustomerLocal({ id: existing.id, ...patch });
+      } else {
+        const newRef = doc(collection(db, 'customers_temp'));
+        const nc = {
+          name: nameKey, source: 'inquiry-auto',
+          firstSource: f.source, firstChannel: f.channel,
+          firstInquiryDate: f.date, firstVisitDate: f.firstVisitDate || null,
+          acquisitionMonth: acqMonth
+        };
+        await setDoc(newRef, { ...nc, createdAt: serverTimestamp() });
+        this.upsertCustomerLocal({ id: newRef.id, ...nc });
+      }
     },
     
     emptyPurchase() {
