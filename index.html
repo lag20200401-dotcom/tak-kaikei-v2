@@ -6239,6 +6239,159 @@ function app() {
 
     // ===== /v0.9.0-a2 月次払い込み記録 =====
     // ===== /v0.9 サブスクヘルパー関数 =====
+
+    // ============================================
+    // ===== 🆕 v0.9.5: 月間統計エンジン =====
+    // ============================================
+
+    // 顧客の初回来院日を取得(customers_temp優先、なければvisitsの最古来院)
+    _getFirstVisitDate(customerName) {
+      const c = this.customersTemp.find(c => c.name === customerName);
+      if (c && c.firstVisitDate) return c.firstVisitDate;
+      const vs = this.visits
+        .filter(v => v.customerName === customerName)
+        .map(v => v.date || '')
+        .filter(Boolean)
+        .sort();
+      return vs.length ? vs[0] : null;
+    },
+
+    // 来院が「新規期間内(初回来院日から30日以内)」か判定
+    _isNewWithin30Days(visit) {
+      const fvd = this._getFirstVisitDate(visit.customerName);
+      if (!fvd) return false;
+      const start = new Date(fvd);
+      const vd = new Date(visit.date || '');
+      if (isNaN(start.getTime()) || isNaN(vd.getTime())) return false;
+      const diff = Math.floor((vd.getTime() - start.getTime()) / 86400000);
+      return diff >= 0 && diff <= 30;
+    },
+
+    // 売上の出どころ別内訳(新規/既存都度/サブスク月次/回数券購入/物販)
+    _calcRevenueBreakdown(ym) {
+      let shinki = 0, kizonToto = 0, kaisuukenKonyu = 0, busshan = 0, subscMonthly = 0;
+      for (const v of this.visits) {
+        if (!(v.date || '').startsWith(ym)) continue;
+        const cat = v.cashbookCategory || '';
+        const amt = Number(v.amount) || 0;
+        if (cat === '回数券購入') {
+          kaisuukenKonyu += amt;
+        } else if (cat === '都度払い') {
+          if (this._isNewWithin30Days(v)) shinki += amt;
+          else kizonToto += amt;
+        }
+      }
+      for (const s of this.sales) {
+        if (!(s.date || '').startsWith(ym)) continue;
+        if (s.isSample) continue;
+        busshan += Number(s.amount) || 0;
+      }
+      for (const p of this.subscriptionPayments) {
+        if (p.yearMonth !== ym) continue;
+        if (p.status !== 'paid') continue;
+        subscMonthly += Number(p.amount) || 0;
+      }
+      const total = shinki + kizonToto + kaisuukenKonyu + busshan + subscMonthly;
+      return { shinki, kizonToto, kaisuukenKonyu, busshan, subscMonthly, total };
+    },
+
+    // 顧客1人の累計売上(visits + sales + subscription_payments paid)
+    _calcCustomerLtv(customerName) {
+      let total = 0;
+      for (const v of this.visits) {
+        if (v.customerName === customerName) total += Number(v.amount) || 0;
+      }
+      for (const s of this.sales) {
+        if (s.customerName === customerName && !s.isSample) total += Number(s.amount) || 0;
+      }
+      for (const p of this.subscriptionPayments) {
+        if (p.customerName === customerName && p.status === 'paid') total += Number(p.amount) || 0;
+      }
+      return total;
+    },
+
+    // 媒体別の新規客LTV集計(当月acquisitionMonthの新規客が対象)
+    _calcMediaLtv(ym) {
+      const newCustomers = this.customersTemp.filter(c => c.acquisitionMonth === ym && c.firstSource);
+      const map = {};
+      for (const c of newCustomers) {
+        const src = c.firstSource || 'その他';
+        if (!map[src]) map[src] = { source: src, count: 0, totalLtv: 0 };
+        map[src].count++;
+        map[src].totalLtv += this._calcCustomerLtv(c.name);
+      }
+      const adByMedia = {};
+      for (const a of this.ads) {
+        if (!(a.date || '').startsWith(ym)) continue;
+        const k = a.category || 'その他';
+        adByMedia[k] = (adByMedia[k] || 0) + (Number(a.amount) || 0);
+      }
+      return Object.values(map).map(r => ({
+        source: r.source,
+        count: r.count,
+        totalLtv: r.totalLtv,
+        avgLtv: r.count > 0 ? Math.round(r.totalLtv / r.count) : 0,
+        adCost: adByMedia[r.source] || 0,
+        roas: (adByMedia[r.source] || 0) > 0 ? Math.round((r.totalLtv / adByMedia[r.source]) * 100) : null
+      })).sort((a, b) => b.totalLtv - a.totalLtv);
+    },
+
+    // 当月の券種別 回数券購入集計(tickets の purchaseDate ベース、Legacy除外)
+    _calcTicketSales(ym) {
+      const map = {};
+      let totalCount = 0, totalAmount = 0;
+      for (const t of this.tickets) {
+        if (t.isLegacy) continue;
+        if (!(t.purchaseDate || '').startsWith(ym)) continue;
+        const key = t.ticketType || '(不明)';
+        if (!map[key]) map[key] = { ticketType: key, count: 0, amount: 0 };
+        map[key].count++;
+        map[key].amount += Number(t.purchasePrice) || 0;
+        totalCount++;
+        totalAmount += Number(t.purchasePrice) || 0;
+      }
+      return { byType: Object.values(map), totalCount, totalAmount };
+    },
+
+    // サブスク状況サマリー(当月)
+    _calcSubscStats(ym) {
+      const payments = this.subscriptionPayments.filter(p => p.yearMonth === ym);
+      let paidCount = 0, paidAmount = 0, pendingCount = 0;
+      for (const p of payments) {
+        if (p.status === 'paid') { paidCount++; paidAmount += Number(p.amount) || 0; }
+        else { pendingCount++; }
+      }
+      const activeCount = this.subscriptions.filter(s => s.status === 'active').length;
+      return { activeCount, paidCount, paidAmount, pendingCount };
+    },
+
+    // 回数券の在庫状況サマリー(月非依存・現時点)
+    _calcTicketStock() {
+      let active = 0, expiring = 0, expiredRemain = 0;
+      for (const t of this.tickets) {
+        const st = this.getTicketStatus(t);
+        const days = this.getDaysUntilExpiry(t.expiryDate);
+        if (st === 'active') {
+          active++;
+          if (days !== null && days <= 30) expiring++;
+        } else if (st === 'expired' && (Number(t.remainingCount) || 0) > 0) {
+          expiredRemain++;
+        }
+      }
+      return { active, expiring, expiredRemain };
+    },
+
+    // 🎯 月間統計の全部入り(画面・Excel共用の心臓部)
+    getMonthlyStats(ym) {
+      if (!ym) return null;
+      const revenue = this._calcRevenueBreakdown(ym);
+      const media = this._calcMediaLtv(ym);
+      const tickets = this._calcTicketSales(ym);
+      const subsc = this._calcSubscStats(ym);
+      const ticketStock = this._calcTicketStock();
+      const newCount = this.customersTemp.filter(c => c.acquisitionMonth === ym).length;
+      return { yearMonth: ym, revenue, media, tickets, subsc, ticketStock, newCount };
+    },
    // 🆕 v0.9.4-4B: 問い合わせ集計・表示ヘルパー
     
     // 月+状態フィルタ後の一覧(日付降順)
