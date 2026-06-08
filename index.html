@@ -2956,6 +2956,7 @@ function app() {
       { id: 'tickets',   label: '🎟️ 回数券',     placeholder: false },
       { id: 'subscriptions', label: '💳 サブスク',    placeholder: false },
       { id: 'inquiries', label: '📞 問い合わせ',  placeholder: false },
+      { id: 'monthly',   label: '📊 月間統計',   placeholder: false },
       { id: 'export',    label: '月末出力',       placeholder: false },
     ],
 
@@ -3011,6 +3012,8 @@ function app() {
     subscriptions: [],  // 🆕 v0.9 サブスク契約マスター
     subscriptionPayments: [],  // 🆕 v0.9.0-a1 サブスク月次払い込み記録
     inquiries: [],             // 🆕 v0.9.4-4A (フェーズ1-4): 問い合わせ記録
+    monthlyTargetMonth: '',    // 🆕 v0.9.5 (パート2): 月間統計の対象月(YYYY-MM, 初期=当月)
+    monthlyStats: null,        // 🆕 v0.9.5 (パート2): getMonthlyStats結果のキャッシュ
 
     // 🆕 v0.8: 回数券種別マスター(購入時のテンプレ)
     TICKET_TYPES: {
@@ -3232,6 +3235,7 @@ function app() {
       this.cashbookMonth = this.currentMonthStr();
       this.exportMonth = this.prevMonth(this.currentMonthStr());  // デフォルト前月
       this.paymentTargetMonth = this.getDefaultPaymentTargetMonth();  // 🆕 v0.9.0-a1: 翌月
+      this.monthlyTargetMonth = this.currentMonthStr();  // 🆕 v0.9.5 (パート2): 月間統計は当月
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -6390,7 +6394,12 @@ function app() {
       const subsc = this._calcSubscStats(ym);
       const ticketStock = this._calcTicketStock();
       const newCount = this.customersTemp.filter(c => c.acquisitionMonth === ym).length;
-      return { yearMonth: ym, revenue, media, tickets, subsc, ticketStock, newCount };
+     return { yearMonth: ym, revenue, media, tickets, subsc, ticketStock, newCount };
+    },
+
+    // 🆕 v0.9.5 (パート2): 画面表示用に月間統計を計算してキャッシュ
+    loadMonthlyStats() {
+      this.monthlyStats = this.getMonthlyStats(this.monthlyTargetMonth);
     },
    // 🆕 v0.9.4-4B: 問い合わせ集計・表示ヘルパー
     
