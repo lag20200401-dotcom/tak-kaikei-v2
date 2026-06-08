@@ -6963,12 +6963,16 @@ function app() {
         log('📣 広告費内訳を生成中...');
         const adsWb = this.buildAdsWorkbook(ym, data);
         const adsBuf = XLSX.write(adsWb, { bookType: 'xlsx', type: 'array' });
+        log('📊 月間統計を生成中...');
+        const statsWb = this.buildMonthlyStatsWorkbook(ym, this.getMonthlyStats(ym));
+        const statsBuf = XLSX.write(statsWb, { bookType: 'xlsx', type: 'array' });
 
         log('🗜 ZIPに圧縮中...');
         const zip = new JSZip();
         zip.file(`${ym}_現金出納帳.xlsx`, cashbookBuf);
         zip.file(`${ym}_物販管理表.xlsx`, salesBuf);
         zip.file(`${ym}_広告費内訳.xlsx`, adsBuf);
+        zip.file(`${ym}_月間統計.xlsx`, statsBuf);
         const zipBlob = await zip.generateAsync({ type: 'blob' });
 
         // ダウンロード
@@ -7327,6 +7331,70 @@ function app() {
       return wb;
     },
 
+    buildMonthlyStatsWorkbook(ym, stats) {
+      const [y, m] = ym.split('-').map(Number);
+      const s = stats || {};
+      const rev = s.revenue || {};
+      const sub = s.subsc || {};
+      const stk = s.ticketStock || {};
+      const rows = [];
+      rows.push([`${y}年${m}月 月間統計(TAK)`]);
+      rows.push([]);
+      rows.push(['【売上内訳】']);
+      rows.push(['新規都度', rev.shinki || 0]);
+      rows.push(['既存都度', rev.kizonToto || 0]);
+      rows.push(['回数券購入', rev.kaisuukenKonyu || 0]);
+      rows.push(['物販', rev.busshan || 0]);
+      rows.push(['サブスク月次', rev.subscMonthly || 0]);
+      rows.push(['合計', rev.total || 0]);
+      rows.push(['当月新規客(人)', s.newCount || 0]);
+      rows.push([]);
+      rows.push(['【媒体別 新規客LTV】 ※広告費・ROASは参考値(媒体名対応表が未整備)']);
+      rows.push(['媒体', '新規', '累計LTV', '平均LTV', '広告費', 'ROAS']);
+      (s.media || []).forEach(md => {
+        rows.push([md.source, md.count, md.totalLtv || 0, md.avgLtv || 0, md.adCost || 0, md.roas === null ? '—' : (md.roas + '%')]);
+      });
+      rows.push([]);
+      rows.push(['【回数券 購入(当月)】']);
+      rows.push(['券種', '枚数', '金額']);
+      ((s.tickets && s.tickets.byType) || []).forEach(t => {
+        rows.push([t.ticketType, t.count, t.amount || 0]);
+      });
+      rows.push(['計', (s.tickets && s.tickets.totalCount) || 0, (s.tickets && s.tickets.totalAmount) || 0]);
+      rows.push([]);
+      rows.push(['【サブスク状況】']);
+      rows.push(['契約中(件)', sub.activeCount || 0]);
+      rows.push(['入金済(件)', sub.paidCount || 0]);
+      rows.push(['未入金(件)', sub.pendingCount || 0]);
+      rows.push(['入金額', sub.paidAmount || 0]);
+      rows.push([]);
+      rows.push(['【回数券 在庫(現時点)】']);
+      rows.push(['有効(枚)', stk.active || 0]);
+      rows.push(['期限間近(枚)', stk.expiring || 0]);
+      rows.push(['期限切れ残(枚)', stk.expiredRemain || 0]);
+      rows.push([]);
+      rows.push(['【手入力欄(このExcelに直接記入)】']);
+      rows.push(['費用合計', '']);
+      rows.push(['チラシ反応率', '']);
+      rows.push(['稼働日数', '']);
+      rows.push(['回数券6/10/18区分', '']);
+      rows.push(['2回目リピート率', '']);
+      rows.push([]);
+      rows.push(['※新規はinquiry登録済みの客のみ。未登録の新規来院は「既存都度」に含まれます。']);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }];
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+      for (let r = 0; r < rows.length; r++) {
+        for (let c = 0; c < 6; c++) {
+          const ref = XLSX.utils.encode_cell({ r, c });
+          if (ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = '#,##0';
+        }
+      }
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `${y}年${m}月`);
+      return wb;
+    },
+
     async recordExportHistory(ym) {
       const { db, doc, setDoc, serverTimestamp } = window._fb;
       await setDoc(doc(db, 'monthlyExports', ym), {
@@ -7335,7 +7403,8 @@ function app() {
         fileNames: [
           `${ym}_現金出納帳.xlsx`,
           `${ym}_物販管理表.xlsx`,
-          `${ym}_広告費内訳.xlsx`
+          `${ym}_広告費内訳.xlsx`,
+          `${ym}_月間統計.xlsx`
         ]
       }, { merge: true });
     }
