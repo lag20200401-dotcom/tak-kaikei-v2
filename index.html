@@ -2307,8 +2307,150 @@
   </section>
 
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
-  <section x-show="currentTab==='export'" class="space-y-4">
+  <!-- 🆕 v0.9.5 (パート2): 📊 月間統計タブ -->
+  <section x-show="currentTab==='monthly'" class="space-y-4">
 
+    <!-- ヘッダー -->
+    <div class="bg-white rounded-xl shadow p-5">
+      <h2 class="text-lg font-bold text-slate-800">📊 月間統計</h2>
+      <p class="text-xs text-slate-500 mt-1">対象月の売上内訳・媒体別LTV・回数券・サブスクを自動集計します。Excel4枚目シートと同じ数字です。</p>
+      <p class="text-xs text-amber-600 mt-1">※新規はinquiry登録済みの客のみ。未登録の新規来院は「既存都度」に含まれます。費用・反応率・稼働日数等はExcelの手入力欄(黄)で管理します。</p>
+    </div>
+
+    <!-- 対象月セレクタ -->
+    <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <label class="text-sm text-slate-600">対象月:</label>
+        <input type="month" x-model="monthlyTargetMonth"
+               class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+        <button @click="monthlyTargetMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+      </div>
+      <button @click="loadMonthlyStats()"
+              class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg">📊 この月で集計</button>
+    </div>
+
+    <!-- 未集計時 -->
+    <div x-show="!monthlyStats" class="bg-white rounded-xl shadow p-8 text-center text-slate-400 text-sm">
+      対象月を選んで「📊 この月で集計」を押してください。
+    </div>
+
+    <!-- 集計結果 -->
+    <div x-show="monthlyStats" class="space-y-4">
+      <!-- 売上内訳 -->
+      <div class="bg-white rounded-xl shadow p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-slate-700">💰 売上内訳 <span class="text-slate-400 font-normal" x-text="monthlyStats?.yearMonth"></span></h3>
+          <span class="text-xs text-slate-500">当月新規客 <span class="font-bold text-teal-700" x-text="monthlyStats?.newCount ?? 0"></span>人</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div class="bg-slate-50 rounded-lg p-3">
+            <div class="text-xs text-slate-500">新規都度</div>
+            <div class="text-lg font-bold text-slate-800" x-text="'¥' + (monthlyStats?.revenue?.shinki || 0).toLocaleString()"></div>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <div class="text-xs text-slate-500">既存都度</div>
+            <div class="text-lg font-bold text-slate-800" x-text="'¥' + (monthlyStats?.revenue?.kizonToto || 0).toLocaleString()"></div>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <div class="text-xs text-slate-500">回数券購入</div>
+            <div class="text-lg font-bold text-slate-800" x-text="'¥' + (monthlyStats?.revenue?.kaisuukenKonyu || 0).toLocaleString()"></div>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <div class="text-xs text-slate-500">物販</div>
+            <div class="text-lg font-bold text-slate-800" x-text="'¥' + (monthlyStats?.revenue?.busshan || 0).toLocaleString()"></div>
+          </div>
+          <div class="bg-slate-50 rounded-lg p-3">
+            <div class="text-xs text-slate-500">サブスク月次</div>
+            <div class="text-lg font-bold text-slate-800" x-text="'¥' + (monthlyStats?.revenue?.subscMonthly || 0).toLocaleString()"></div>
+          </div>
+          <div class="bg-teal-50 rounded-lg p-3 border border-teal-200">
+            <div class="text-xs text-teal-700">合計</div>
+            <div class="text-lg font-bold text-teal-800" x-text="'¥' + (monthlyStats?.revenue?.total || 0).toLocaleString()"></div>
+          </div>
+        </div>
+      </div>
+      <!-- 媒体別LTV -->
+      <div class="bg-white rounded-xl shadow p-5">
+        <h3 class="text-sm font-bold text-slate-700 mb-1">📣 媒体別 新規客LTV</h3>
+        <p class="text-xs text-amber-600 mb-3">※広告費・ROASは媒体名の対応表が未整備のため参考値(ズレあり)。LTVは新規客が来院し売上が付くと積み上がります。</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-slate-500 border-b">
+                <th class="py-2 pr-2">媒体</th>
+                <th class="py-2 px-2 text-right">新規</th>
+                <th class="py-2 px-2 text-right">累計LTV</th>
+                <th class="py-2 px-2 text-right">平均LTV</th>
+                <th class="py-2 px-2 text-right">広告費</th>
+                <th class="py-2 pl-2 text-right">ROAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="m in (monthlyStats?.media || [])" :key="m.source">
+                <tr class="border-b border-slate-100">
+                  <td class="py-2 pr-2 font-medium text-slate-700" x-text="m.source"></td>
+                  <td class="py-2 px-2 text-right" x-text="m.count + '人'"></td>
+                  <td class="py-2 px-2 text-right" x-text="'¥' + (m.totalLtv || 0).toLocaleString()"></td>
+                  <td class="py-2 px-2 text-right" x-text="'¥' + (m.avgLtv || 0).toLocaleString()"></td>
+                  <td class="py-2 px-2 text-right text-slate-400" x-text="'¥' + (m.adCost || 0).toLocaleString()"></td>
+                  <td class="py-2 pl-2 text-right text-slate-400" x-text="m.roas === null ? '—' : (m.roas + '%')"></td>
+                </tr>
+              </template>
+              <tr x-show="!(monthlyStats?.media || []).length">
+                <td colspan="6" class="py-4 text-center text-slate-400 text-xs">この月の新規客(媒体記録あり)はまだありません。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- 回数券購入(当月) / サブスク / 在庫 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <!-- 回数券購入(当月) -->
+        <div class="bg-white rounded-xl shadow p-5">
+          <h3 class="text-sm font-bold text-slate-700 mb-3">🎟️ 回数券 購入(当月)</h3>
+          <div class="space-y-1 text-sm">
+            <template x-for="t in (monthlyStats?.tickets?.byType || [])" :key="t.ticketType">
+              <div class="flex justify-between border-b border-slate-100 py-1">
+                <span class="text-slate-600" x-text="t.ticketType + ' ×' + t.count"></span>
+                <span class="font-medium text-slate-800" x-text="'¥' + (t.amount || 0).toLocaleString()"></span>
+              </div>
+            </template>
+            <div x-show="!(monthlyStats?.tickets?.byType || []).length" class="text-xs text-slate-400 py-2">当月の購入なし</div>
+          </div>
+          <div class="flex justify-between mt-2 pt-2 border-t font-bold text-teal-800">
+            <span x-text="'計 ' + (monthlyStats?.tickets?.totalCount || 0) + '件'"></span>
+            <span x-text="'¥' + (monthlyStats?.tickets?.totalAmount || 0).toLocaleString()"></span>
+          </div>
+        </div>
+
+        <!-- サブスク状況 -->
+        <div class="bg-white rounded-xl shadow p-5">
+          <h3 class="text-sm font-bold text-slate-700 mb-3">💳 サブスク状況</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between"><span class="text-slate-600">契約中</span><span class="font-medium" x-text="(monthlyStats?.subsc?.activeCount || 0) + '件'"></span></div>
+            <div class="flex justify-between"><span class="text-slate-600">入金済</span><span class="font-medium" x-text="(monthlyStats?.subsc?.paidCount || 0) + '件'"></span></div>
+            <div class="flex justify-between"><span class="text-slate-600">未入金</span><span class="font-medium text-amber-600" x-text="(monthlyStats?.subsc?.pendingCount || 0) + '件'"></span></div>
+            <div class="flex justify-between pt-2 border-t font-bold text-teal-800"><span>入金額</span><span x-text="'¥' + (monthlyStats?.subsc?.paidAmount || 0).toLocaleString()"></span></div>
+          </div>
+        </div>
+
+        <!-- 回数券在庫 -->
+        <div class="bg-white rounded-xl shadow p-5">
+          <h3 class="text-sm font-bold text-slate-700 mb-3">📦 回数券 在庫(現時点)</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between"><span class="text-slate-600">有効</span><span class="font-medium" x-text="(monthlyStats?.ticketStock?.active || 0) + '枚'"></span></div>
+            <div class="flex justify-between"><span class="text-slate-600">期限間近</span><span class="font-medium text-amber-600" x-text="(monthlyStats?.ticketStock?.expiring || 0) + '枚'"></span></div>
+            <div class="flex justify-between"><span class="text-slate-600">期限切れ残</span><span class="font-medium text-red-500" x-text="(monthlyStats?.ticketStock?.expiredRemain || 0) + '枚'"></span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+  <section x-show="currentTab==='export'" class="space-y-4">
     <!-- 未出力アラート -->
     <div x-show="pendingExports.length > 0"
          class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl">
