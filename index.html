@@ -3335,6 +3335,12 @@ function app() {
     inquiryChannels: ['電話', 'LINE', 'メール', '来院', 'その他'],
     inquiryStatuses: ['new', 'contacted', 'booked', 'visited', 'lost'],
 
+      // 🆕 v0.9.6: 媒体名変換表 (ads.category → firstSource基準名)。未登録の媒体はそのまま扱う
+    MEDIA_NAME_MAP: {
+      'Instagram広告': 'メタ広告',
+      'GoogleMap': 'Gmap',
+    },
+
     // ===== 🆕 v0.7: 仕入フォーム =====
     purchaseForm: {
       id: null,
