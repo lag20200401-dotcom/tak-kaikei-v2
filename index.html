@@ -6483,6 +6483,10 @@ function app() {
         const k = this.normalizeMediaName(a.category || 'その他');
         adByMedia[k] = (adByMedia[k] || 0) + (Number(a.amount) || 0);
       }
+      // 🆕 v0.9.6: 広告費はあるが新規客0の媒体も行として出す(費用対効果の可視化)
+      for (const src of Object.keys(adByMedia)) {
+        if (!map[src]) map[src] = { source: src, count: 0, totalLtv: 0 };
+      }
       return Object.values(map).map(r => ({
         source: r.source,
         count: r.count,
