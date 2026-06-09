@@ -6467,7 +6467,10 @@ function app() {
     },
 
     // 来院が「新規期間内(初回来院日から30日以内)」か判定
-    _isNewWithin30Days(visit) {
+   _isNewWithin30Days(visit) {
+      // 🆕 v0.9.6: 囲い込み職人CSV由来=アプリ導入前からの既存客は新規扱いしない
+      const cust = this.customersTemp.find(c => c.name === visit.customerName);
+      if (cust && cust.importedFrom === 'kakoikomi') return false;
       const fvd = this._getFirstVisitDate(visit.customerName);
       if (!fvd) return false;
       const start = new Date(fvd);
