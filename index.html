@@ -6462,6 +6462,11 @@ function app() {
       return total;
     },
 
+    // 🆕 v0.9.6: ads.category を firstSource 基準名に正規化(未登録ならそのまま)
+    normalizeMediaName(name) {
+      return this.MEDIA_NAME_MAP[name] || name;
+    },
+
     // 媒体別の新規客LTV集計(当月acquisitionMonthの新規客が対象)
     _calcMediaLtv(ym) {
       const newCustomers = this.customersTemp.filter(c => c.acquisitionMonth === ym && c.firstSource);
@@ -6474,8 +6479,8 @@ function app() {
       }
       const adByMedia = {};
       for (const a of this.ads) {
-        if (!(a.date || '').startsWith(ym)) continue;
-        const k = a.category || 'その他';
+       if (!(a.date || '').startsWith(ym)) continue;
+        const k = this.normalizeMediaName(a.category || 'その他');
         adByMedia[k] = (adByMedia[k] || 0) + (Number(a.amount) || 0);
       }
       return Object.values(map).map(r => ({
