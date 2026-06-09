@@ -6621,6 +6621,7 @@ function app() {
       const revenueDetail = this.visits
         .filter(v => (v.date || '').startsWith(ym))
         .filter(v => { const cat = v.cashbookCategory || ''; return cat === '回数券購入' || cat === '都度払い'; })
+            .filter(v => v.paymentMethod !== 'サブスク利用')  // 🆕 v0.9.6: ¥0のサブスク利用行を明細から除外
         .map(v => {
           const cat = v.cashbookCategory || '';
           let kubun = cat;
