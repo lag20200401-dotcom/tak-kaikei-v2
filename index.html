@@ -6551,7 +6551,23 @@ function app() {
       const subsc = this._calcSubscStats(ym);
       const ticketStock = this._calcTicketStock();
       const newCount = this.customersTemp.filter(c => c.acquisitionMonth === ym).length;
-     return { yearMonth: ym, revenue, media, tickets, subsc, ticketStock, newCount };
+      // 🆕 v0.9.6: 明細1 — 当月新規客リスト(媒体別LTVの根拠)
+      const newCustomerList = this.customersTemp
+        .filter(c => c.acquisitionMonth === ym)
+        .map(c => ({ name: c.name, source: c.firstSource || '(未設定)', ltv: this._calcCustomerLtv(c.name) }))
+        .sort((a, b) => b.ltv - a.ltv);
+      // 🆕 v0.9.6: 明細2 — 当月の売上明細(売上内訳の根拠)
+      const revenueDetail = this.visits
+        .filter(v => (v.date || '').startsWith(ym))
+        .filter(v => { const cat = v.cashbookCategory || ''; return cat === '回数券購入' || cat === '都度払い'; })
+        .map(v => {
+          const cat = v.cashbookCategory || '';
+          let kubun = cat;
+          if (cat === '都度払い') kubun = this._isNewWithin30Days(v) ? '新規都度' : '既存都度';
+          return { date: v.date, name: v.customerName, menu: v.menu, kubun, amount: Number(v.amount) || 0 };
+        })
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      return { yearMonth: ym, revenue, media, tickets, subsc, ticketStock, newCount, newCustomerList, revenueDetail };
     },
 
     // 🆕 v0.9.5 (パート2): 画面表示用に月間統計を計算してキャッシュ
