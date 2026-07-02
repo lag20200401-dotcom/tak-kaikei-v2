@@ -3208,6 +3208,9 @@ function app() {
     cashDeposits: [],   // 🆕 v0.5
     monthlyExports: [], // 🆕 v0.5
     purchases: [],      // 🆕 v0.7 仕入記録
+    stockCounts: [],        // 🆕 在庫: 月初実棚アンカー
+    stockAdjustments: [],   // 🆕 在庫: 棚卸し調整
+    stockMonth: '',         // 🆕 在庫: 表示月(YYYY-MM)
     tickets: [],        // 🆕 v0.8 回数券データ
     subscriptions: [],  // 🆕 v0.9 サブスク契約マスター
     subscriptionPayments: [],  // 🆕 v0.9.0-a1 サブスク月次払い込み記録
@@ -3442,6 +3445,7 @@ function app() {
       this.exportMonth = this.prevMonth(this.currentMonthStr());  // デフォルト前月
       this.paymentTargetMonth = this.getDefaultPaymentTargetMonth();  // 🆕 v0.9.0-a1: 翌月
       this.monthlyTargetMonth = this.currentMonthStr();  // 🆕 v0.9.5 (パート2): 月間統計は当月
+      this.stockMonth = this.currentMonthStr();  // 🆕 在庫: 表示月=当月
       window.addEventListener('firebase-ready', () => {
         this.fbReady = true;
         if (this.unlocked) this.subscribeAll();
@@ -3561,6 +3565,17 @@ function app() {
         this.inquiries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }, err => { console.error('inquiries購読エラー:', err); this.cloudStatus = '接続エラー'; });
       this.unsubscribers.push(u12);
+      // 🆕 在庫: 月初実棚アンカーの購読
+      const u13 = onSnapshot(query(collection(db, 'stock_counts')), snap => {
+        this.stockCounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('stock_counts購読エラー:', err); });
+      this.unsubscribers.push(u13);
+
+      // 🆕 在庫: 棚卸し調整の購読
+      const u14 = onSnapshot(query(collection(db, 'stock_adjustments')), snap => {
+        this.stockAdjustments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }, err => { console.error('stock_adjustments購読エラー:', err); });
+      this.unsubscribers.push(u14);
 
       // 🆕 v0.9.4-fix: アプリ起動時に今月の月初繰越を自動読み込み(日向さん依頼)
       try {
