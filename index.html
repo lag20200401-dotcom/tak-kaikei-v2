@@ -4493,6 +4493,44 @@ function app() {
       }
       return Object.values(map).sort((a, b) => b.totalAmount - a.totalAmount);
     },
+    // 🆕 在庫: 月次台帳の集計（商品ごと・指定月）
+      stockLedger(month) {
+        const ym = month || this.stockMonth || this.currentMonthStr();
+        const inMonth = (d) => (d || '').slice(0, 7) === ym;
+        const beforeMonth = (d) => (d || '').slice(0, 7) < ym;
+        // 直近の実棚アンカー（指定月以前で最新）を商品ごとに引く
+        const anchorOf = (pid) => {
+          const cs = this.stockCounts
+            .filter(c => c.productId === pid && (c.yearMonth || '') <= ym)
+            .sort((a, b) => (a.yearMonth || '').localeCompare(b.yearMonth || ''));
+          return cs.length ? cs[cs.length - 1] : null;
+        };
+        return this.products.map(p => {
+          const anchor = anchorOf(p.id);
+          const anchorYm = anchor ? anchor.yearMonth : null;
+          // 起点在庫: 実棚アンカーがあればその値、無ければ従来のinitialStock
+          let base = anchor ? (anchor.qty || 0) : (p.initialStock || 0);
+          // アンカー月(またはデータ最初)〜前月末までの増減を積む=当月の月初在庫
+          const afterAnchor = (d) => {
+            if (!d) return false;
+            const dym = d.slice(0, 7);
+            if (anchorYm) return dym > anchorYm && dym < ym;   // アンカー翌月〜前月
+            return dym < ym;                                   // アンカー無しは前月末まで全部
+          };
+          const sum = (arr, key, filt) => arr.filter(filt).reduce((s, x) => s + (x[key] || 0), 0);
+          const pBuyBefore = sum(this.purchases, 'quantity', x => x.productName === p.name && afterAnchor(x.date));
+          const pAdjBefore = sum(this.stockAdjustments, 'qty', x => x.productId === p.id && afterAnchor(x.date));
+          const pSellBefore = sum(this.sales, 'quantity', x => x.productName === p.name && afterAnchor(x.date));
+          const opening = base + pBuyBefore + pAdjBefore - pSellBefore;
+          // 当月分
+          const buy = sum(this.purchases, 'quantity', x => x.productName === p.name && inMonth(x.date));
+          const adj = sum(this.stockAdjustments, 'qty', x => x.productId === p.id && inMonth(x.date));
+          const sell = sum(this.sales, 'quantity', x => x.productName === p.name && !x.isSample && inMonth(x.date));
+          const sample = sum(this.sales, 'quantity', x => x.productName === p.name && x.isSample && inMonth(x.date));
+          const closing = opening + buy + adj - sell - sample;
+          return { id: p.id, name: p.name, opening, buy, sell, sample, adj, closing };
+        }).filter(r => r.opening || r.buy || r.sell || r.sample || r.adj || r.closing);
+      },
 
     get filteredSalesCustomers() {
       const q = (this.salesForm.customerName || '').trim();
