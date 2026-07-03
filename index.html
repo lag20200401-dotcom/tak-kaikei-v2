@@ -2336,6 +2336,8 @@
                 <th class="text-right px-3 py-2">サンプル</th>
                 <th class="text-right px-3 py-2">調整</th>
                 <th class="text-right px-3 py-2 font-bold">月末(理論)</th>
+                <th class="text-right px-3 py-2 bg-emerald-50">実棚(月頭)</th>
+                <th class="text-right px-3 py-2 bg-emerald-50">差異</th>
               </tr>
             </thead>
             <tbody>
@@ -2348,10 +2350,17 @@
                   <td class="px-3 py-2 text-right text-amber-600" x-text="r.sample ? '-'+r.sample : '-'"></td>
                   <td class="px-3 py-2 text-right text-slate-500" x-text="r.adj ? (r.adj>0?'+':'')+r.adj : '-'"></td>
                   <td class="px-3 py-2 text-right font-bold" :class="r.closing < 0 ? 'text-red-600' : 'text-slate-800'" x-text="r.closing"></td>
+                  <td class="px-3 py-2 text-right bg-emerald-50">
+                    <input type="number" class="w-16 px-1 py-0.5 border border-slate-300 rounded text-right text-sm"
+                           :value="stockCountOf(r.id)" @change="saveStockCount(r.id, $event.target.value)">
+                  </td>
+                  <td class="px-3 py-2 text-right bg-emerald-50" x-text="stockDiffOf(r) ?? '-'"
+                      :class="stockDiffOf(r) < 0 ? 'text-red-600' : (stockDiffOf(r) > 0 ? 'text-amber-600' : 'text-slate-400')"></td>
+                  
                 </tr>
               </template>
               <tr x-show="stockLedger(stockMonth).length === 0">
-                <td colspan="7" class="px-3 py-6 text-center text-slate-400">この月に動きのある在庫データがありません</td>
+                <td colspan="9" class="px-3 py-6 text-center text-slate-400">この月に動きのある在庫データがありません</td>
               </tr>
             </tbody>
           </table>
@@ -4583,6 +4592,39 @@ function app() {
           const closing = opening + buy + adj - sell - sample;
           return { id: p.id, name: p.name, opening, buy, sell, sample, adj, closing };
         }).filter(r => r.opening || r.buy || r.sell || r.sample || r.adj || r.closing);
+      },
+    // 🆕 在庫: 実棚アンカーの取得（指定月・商品）
+      stockCountOf(pid) {
+        const c = this.stockCounts.find(x => x.productId === pid && x.yearMonth === this.stockMonth);
+        return c ? c.qty : '';
+      },
+      // 🆕 在庫: 実棚−理論月初の差異
+      stockDiffOf(r) {
+        const c = this.stockCounts.find(x => x.productId === r.id && x.yearMonth === this.stockMonth);
+        if (!c) return null;
+        return (c.qty || 0) - r.opening;
+      },
+      // 🆕 在庫: 実棚アンカーを保存（案C＝この月の月初を実棚で確定）
+      async saveStockCount(pid, value) {
+        const { db, collection, doc, setDoc, serverTimestamp } = window._fb;
+        if (value === '') return;
+        const qty = Number(value) || 0;
+        const existing = this.stockCounts.find(x => x.productId === pid && x.yearMonth === this.stockMonth);
+        try {
+          const ref = existing && existing.id
+            ? doc(db, 'stock_counts', existing.id)
+            : doc(collection(db, 'stock_counts'));
+          await setDoc(ref, {
+            productId: pid,
+            yearMonth: this.stockMonth,
+            qty: qty,
+            note: '実棚',
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (e) {
+          console.error('stock_count保存エラー:', e);
+          alert('実棚の保存に失敗しました: ' + e.message);
+        }
       },
 
     get filteredSalesCustomers() {
