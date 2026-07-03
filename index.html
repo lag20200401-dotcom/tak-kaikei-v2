@@ -2305,6 +2305,59 @@
     </div>
 
   </section>
+  <!-- ====== 🆕 在庫タブ ====== -->
+      <section x-show="currentTab==='stock'" class="space-y-4">
+
+        <!-- ヘッダー -->
+        <div class="bg-white rounded-xl shadow p-5">
+          <h2 class="text-lg font-bold text-slate-800">📦 在庫台帳</h2>
+          <p class="text-xs text-slate-500 mt-1">月初在庫＋仕入−物販−サンプル±調整＝月末在庫。月初在庫は前月末を自動転記、棚を数えた月は実棚で補正できます。</p>
+        </div>
+
+        <!-- 対象月セレクタ -->
+        <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <label class="text-sm text-slate-600">対象月:</label>
+            <input type="month" x-model="stockMonth"
+                   class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+            <button @click="stockMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+          </div>
+        </div>
+
+        <!-- 台帳テーブル -->
+        <div class="bg-white rounded-xl shadow overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-50 text-slate-600 text-xs">
+                <th class="text-left px-3 py-2">商品名</th>
+                <th class="text-right px-3 py-2">月初</th>
+                <th class="text-right px-3 py-2">仕入</th>
+                <th class="text-right px-3 py-2">物販</th>
+                <th class="text-right px-3 py-2">サンプル</th>
+                <th class="text-right px-3 py-2">調整</th>
+                <th class="text-right px-3 py-2 font-bold">月末(理論)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in stockLedger(stockMonth)" :key="r.id">
+                <tr class="border-t border-slate-100">
+                  <td class="px-3 py-2" x-text="r.name"></td>
+                  <td class="px-3 py-2 text-right text-slate-500" x-text="r.opening"></td>
+                  <td class="px-3 py-2 text-right text-emerald-600" x-text="r.buy ? '+'+r.buy : '-'"></td>
+                  <td class="px-3 py-2 text-right text-rose-500" x-text="r.sell ? '-'+r.sell : '-'"></td>
+                  <td class="px-3 py-2 text-right text-amber-600" x-text="r.sample ? '-'+r.sample : '-'"></td>
+                  <td class="px-3 py-2 text-right text-slate-500" x-text="r.adj ? (r.adj>0?'+':'')+r.adj : '-'"></td>
+                  <td class="px-3 py-2 text-right font-bold" :class="r.closing < 0 ? 'text-red-600' : 'text-slate-800'" x-text="r.closing"></td>
+                </tr>
+              </template>
+              <tr x-show="stockLedger(stockMonth).length === 0">
+                <td colspan="7" class="px-3 py-6 text-center text-slate-400">この月に動きのある在庫データがありません</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
 
   <!-- ====== 🆕 v0.5: 月末出力タブ ====== -->
   <!-- 🆕 v0.9.5 (パート2): 📊 月間統計タブ -->
