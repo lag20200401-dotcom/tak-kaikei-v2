@@ -4591,7 +4591,7 @@ function app() {
           const sample = sum(this.sales, 'quantity', x => x.productName === p.name && x.isSample && inMonth(x.date));
           const closing = opening + buy + adj - sell - sample;
           return { id: p.id, name: p.name, opening, buy, sell, sample, adj, closing };
-        }).filter(r => r.opening || r.buy || r.sell || r.sample || r.adj || r.closing);
+        });
       },
     // 🆕 在庫: 実棚アンカーの取得（指定月・商品）
       stockCountOf(pid) {
