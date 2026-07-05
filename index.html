@@ -294,6 +294,13 @@
         <input type="month" x-model="visitFilterMonth"
                class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
         <button @click="visitFilterMonth = currentMonthStr()" class="text-xs text-teal-700 hover:underline">今月</button>
+        <label class="text-sm text-slate-600 ml-3">担当:</label>
+            <select x-model="visitFilterStaff" class="px-3 py-1 border border-slate-300 rounded-lg text-sm">
+              <option value="">全員</option>
+              <template x-for="s in staffList" :key="s">
+                <option :value="s" x-text="s"></option>
+              </template>
+            </select>
       </div>
       <div class="text-sm text-slate-600">
         <span x-text="filteredVisits.length"></span>件 / 合計
@@ -3306,6 +3313,7 @@ function app() {
     visitMessage: '',
     visitMessageType: 'ok',
     visitFilterMonth: '',
+    visitFilterStaff: '',   // 🆕 来院: 担当者フィルタ（空=全員）
     showSuggest: false,
     visitHistoryOpen: false,  // 🆕 v0.9.3: 来院履歴の展開状態
 
@@ -3819,9 +3827,11 @@ function app() {
     },
 
    get filteredVisits() {
-      if (!this.visitFilterMonth) return this.visits;
-      return this.visits.filter(v => (v.date || '').startsWith(this.visitFilterMonth));
-    },
+        let list = this.visits;
+        if (this.visitFilterMonth) list = list.filter(v => (v.date || '').startsWith(this.visitFilterMonth));
+        if (this.visitFilterStaff) list = list.filter(v => v.staff === this.visitFilterStaff);
+        return list;
+      },
     visitTotalAmount() {
       return this.filteredVisits.reduce((s, v) => s + (v.amount || 0), 0);
     },
