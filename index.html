@@ -6882,6 +6882,7 @@ function app() {
         })
         .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
       return { yearMonth: ym, revenue, media, tickets, subsc, ticketStock, newCount, newCustomerList, revenueDetail, symptomMatrix };
+    },
 
     // 🆕 v0.9.5 (パート2): 画面表示用に月間統計を計算してキャッシュ
     loadMonthlyStats() {
