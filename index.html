@@ -2202,10 +2202,21 @@
           <input type="text" x-model="inquiryForm.lostReason" placeholder="例: 料金/距離/日程" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
         <div class="md:col-span-3">
+          <label class="block text-xs text-slate-500 mb-1">症状(複数選択可)</label>
+          <div class="flex flex-wrap gap-1.5">
+            <template x-for="sym in inquirySymptoms" :key="sym">
+              <button type="button"
+                @click="inquiryForm.symptoms = (inquiryForm.symptoms || []).includes(sym) ? inquiryForm.symptoms.filter(s => s !== sym) : [...(inquiryForm.symptoms || []), sym]"
+                :class="(inquiryForm.symptoms || []).includes(sym) ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-600 border-slate-300'"
+                class="px-3 py-1.5 rounded-full border text-xs"
+                x-text="sym"></button>
+            </template>
+          </div>
+        </div>
+        <div class="md:col-span-3">
           <label class="block text-xs text-slate-500 mb-1">備考</label>
           <input type="text" x-model="inquiryForm.note" placeholder="メモ" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
         </div>
-      </div>
       <div class="flex items-center gap-3 mt-4">
         <button @click="saveInquiry()" :disabled="saving || !canSaveInquiry()" class="px-5 py-2 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white text-sm font-bold rounded-lg shadow">
           <span x-text="inquiryForm.id ? '更新する' : '保存する'"></span>
@@ -3454,6 +3465,7 @@ function app() {
       source: '紹介',
       channel: '電話',
       status: 'new',
+      symptoms: [],
       bookedDate: null,
       firstVisitDate: null,
       lostReason: '',
@@ -3466,6 +3478,7 @@ function app() {
     inquirySources: ['メタ広告', 'ホットペッパー', 'Gmap', '紹介', 'LINE公式', '折込チラシ', 'その他'],
     inquiryChannels: ['電話', 'LINE', 'メール', '来院', 'その他'],
     inquiryStatuses: ['new', 'contacted', 'booked', 'visited', 'lost'],
+    inquirySymptoms: ['腰痛', '坐骨神経痛', '膝痛', '股関節痛', '頭痛', '肩こり', '姿勢', '肩痛'],
 
       // 🆕 v0.9.6: 媒体名変換表 (ads.category → firstSource基準名)。未登録の媒体はそのまま扱う
     MEDIA_NAME_MAP: {
@@ -6849,6 +6862,7 @@ function app() {
         source: '紹介',
         channel: '電話',
         status: 'new',
+        symptoms: [],
         bookedDate: null,
         firstVisitDate: null,
         lostReason: '',
@@ -6872,7 +6886,8 @@ function app() {
         customerName: i.customerName || '', source: i.source || '紹介',
         channel: i.channel || '電話', status: i.status || 'new',
         bookedDate: i.bookedDate || null, firstVisitDate: i.firstVisitDate || null,
-        lostReason: i.lostReason || '', note: i.note || ''
+        lostReason: i.lostReason || '', note: i.note || '',
+        symptoms: Array.isArray(i.symptoms) ? i.symptoms : []
       };
       this.inquiryMessage = '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -6912,6 +6927,7 @@ function app() {
           firstVisitDate: f.firstVisitDate || null,
           lostReason: f.lostReason || '',
           note: f.note || '',
+          symptoms: Array.isArray(f.symptoms) ? f.symptoms : [],
           updatedAt: serverTimestamp()
         };
         if (!f.id) data.createdAt = serverTimestamp();
